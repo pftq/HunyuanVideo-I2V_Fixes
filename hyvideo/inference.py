@@ -193,10 +193,15 @@ class Inference(object):
         # =========================== Build main model ===========================
         logger.info("Building model...")
         factor_kwargs = {"device": device, "dtype": PRECISION_TO_TYPE[args.precision]}
-        if args.i2v_mode:
+        if args.i2v_mode and args.i2v_condition_type == "latent_concat":
             in_channels = args.latent_channels * 2 + 1
+            image_embed_interleave = 2
+        elif args.i2v_mode and args.i2v_condition_type == "token_replace":
+            in_channels = args.latent_channels
+            image_embed_interleave = 4
         else:
             in_channels = args.latent_channels
+            image_embed_interleave = 1
         out_channels = args.latent_channels
 
         if args.embedded_cfg_scale:
@@ -269,6 +274,7 @@ class Inference(object):
             reproduce=args.reproduce,
             logger=logger,
             device=device if not args.use_cpu_offload else "cpu",
+            image_embed_interleave=image_embed_interleave
         )
         text_encoder_2 = None
         if args.text_encoder_2 is not None:
@@ -542,6 +548,8 @@ class HunyuanVideoSampler(Inference):
         i2v_mode=False,
         i2v_resolution="720p",
         i2v_image_path=None,
+        i2v_condition_type=None,
+        i2v_stability=True,
         **kwargs,
     ):
         """
@@ -714,7 +722,8 @@ class HunyuanVideoSampler(Inference):
                 guidance_scale: {guidance_scale}
                       n_tokens: {n_tokens}
                     flow_shift: {flow_shift}
-       embedded_guidance_scale: {embedded_guidance_scale}"""
+       embedded_guidance_scale: {embedded_guidance_scale}
+                 i2v_stability: {i2v_stability}"""
         logger.debug(debug_str)
 
         # ========================================================================
@@ -740,6 +749,8 @@ class HunyuanVideoSampler(Inference):
             vae_ver=self.args.vae,
             enable_tiling=self.args.vae_tiling,
             i2v_mode=i2v_mode,
+            i2v_condition_type=i2v_condition_type,
+            i2v_stability=i2v_stability,
             img_latents=img_latents,
             semantic_images=semantic_images,
         )[0]

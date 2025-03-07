@@ -34,6 +34,7 @@
 > [**HunyuanVideo: A Systematic Framework For Large Video Generation Model**](https://arxiv.org/abs/2412.03603)
 
 ## 🔥🔥🔥 最新动态
+* 2025年3月7日: 🔥 我们已经修复了开源版本中导致ID变化的bug，请尝试[HunyuanVideo-I2V](https://huggingface.co/tencent/HunyuanVideo-I2V)新的模型权重，以确保首帧完全视觉一致性，并制作更高质量的视频。
 * 2025年3月6日: 👋 发布HunyuanVideo-I2V的推理代码和模型权重。[下载地址](https://github.com/Tencent/HunyuanVideo-I2V/blob/main/ckpts/README.md)
 
 ## 🎥 演示
@@ -43,19 +44,24 @@
   <p>联合创作 @D-aiY 导演 丁一</p>
 </div>
 
-### 定制化I2V LoRA效果演示
+### 首帧一致性示例
+|  参考图 | 生成视频  |参考图 | 生成视频   |参考图 | 生成视频  |
+|:----------------:|:----------------:|:----------------:|:----------------:|:----------------:|:----------------:|
+|        <img src="https://github.com/user-attachments/assets/83e7a097-ffca-40db-9c72-be01d866aa7d" width="80%">         |       <video src="https://github.com/user-attachments/assets/f81d2c88-bb1a-43f8-b40f-1ccc20774563" width="100%"> </video>        |       <img src="https://github.com/user-attachments/assets/c385a11f-60c7-4919-b0f1-bc5e715f673c" width="50%">         |       <video src="https://github.com/user-attachments/assets/0c29ede9-0481-4d40-9c67-a4b6267fdc2d" width="100%"> </video>        | <img src="https://github.com/user-attachments/assets/5763f5eb-0be5-4b36-866a-5199e31c5802" width="95%">         |       <video src="https://github.com/user-attachments/assets/a8da0a1b-ba7d-45a4-a901-5d213ceaf50e" width="100%"> </video>        |
+
+<!-- ### 定制化I2V LoRA效果演示
 
 | 特效类型       |  参考图像  | 生成视频  |
 |:---------------:|:--------------------------------:|:----------------:|
 |   头发生长   |        <img src="./assets/demo/i2v_lora/imgs/hair_growth.png" width="40%">         |       <video src="https://github.com/user-attachments/assets/06b998ae-bbde-4c1f-96cb-a25a9197d5cb" width="100%"> </video>        |
-|     拥抱     |      <img src="./assets/demo/i2v_lora/imgs/embrace.png" width="40%">          |       <video src="https://github.com/user-attachments/assets/f8c99eb1-2a43-489a-ba02-6bd50a6dd260" width="100%" > </video>        |
+|     拥抱     |      <img src="./assets/demo/i2v_lora/imgs/embrace.png" width="40%">          |       <video src="https://github.com/user-attachments/assets/f8c99eb1-2a43-489a-ba02-6bd50a6dd260" width="100%" > </video>        | -->
 
 ## 📑 开源计划
 - HunyuanVideo-I2V（图像到视频模型）
-  - [x] LoRA训练脚本
   - [x] 推理代码
   - [x] 模型权重
   - [x] ComfyUI支持
+  - [ ] LoRA训练脚本
   - [ ] 多GPU序列并行推理（提升多卡推理速度）
   - [ ] Diffusers集成 
   - [ ] FP8量化权重
@@ -65,7 +71,7 @@
   - [🔥🔥🔥 最新动态](#-最新动态)
   - [🎥 演示](#-演示)
     - [I2V 示例](#i2v-示例)
-    - [定制化I2V LoRA效果演示](#定制化i2v-lora效果演示)
+    - [首帧一致性示例](#首帧一致性示例)
   - [📑 开源计划](#-开源计划)
   - [目录](#目录)
   - [**HunyuanVideo-I2V 整体架构**](#hunyuanvideo-i2v-整体架构)
@@ -77,19 +83,13 @@
     - [使用图生视频模型的建议](#使用图生视频模型的建议)
     - [使用命令行](#使用命令行)
     - [更多配置](#更多配置)
-  - [🎉自定义 I2V LoRA 效果训练](#自定义-i2v-lora-效果训练)
-    - [要求](#要求)
-    - [训练环境](#训练环境)
-    - [训练数据构建](#训练数据构建)
-    - [开始训练](#开始训练)
-    - [推理](#推理)
   - [🔗 BibTeX](#-bibtex)
   - [致谢](#致谢)
 
 ---
 
 ## **HunyuanVideo-I2V 整体架构**
-基于[HunyuanVideo](https://github.com/Tencent/HunyuanVideo)强大的视频生成能力，我们将其扩展至图像到视频生成任务。为此，我们采用图像隐空间拼接技术，有效重构并融合参考图像信息至视频生成流程中。
+基于[HunyuanVideo](https://github.com/Tencent/HunyuanVideo)强大的视频生成能力，我们将其扩展至图像到视频生成任务。为此，我们采用首帧Token替换方案，有效重构并融合参考图像信息至视频生成流程中。
 
 由于我们使用预训练的Decoder-Only架构多模态大语言模型（MLLM）作为文本编码器，可用于显著增强模型对输入图像语义内容的理解能力，并实现图像与文本描述信息的深度融合。具体而言，输入图像经MLLM处理后生成语义图像tokens，这些tokens与视频隐空间tokens拼接，实现跨模态的全注意力计算。
 
@@ -224,7 +224,7 @@ python3 sample_image2video.py \
 |     `--save-path`      |         ./results             |         保存生成视频的路径。                     |
 
 
-## 🎉自定义 I2V LoRA 效果训练
+<!-- ## 🎉自定义 I2V LoRA 效果训练
 
 ###  要求
 
@@ -292,7 +292,7 @@ python3 sample_image2video.py \
 |:-------------------:|:-------:|:----------------------------:|
 |    `--use-lora`     |  None   |  是否开启 LoRA 模式。  |
 |   `--lora-scale`    |   1.0   | LoRA 模型的融合比例。 |
-|   `--lora-path`     |   ""    |  LoRA 模型的权重路径。 |
+|   `--lora-path`     |   ""    |  LoRA 模型的权重路径。 | -->
 
 ## 🔗 BibTeX
 

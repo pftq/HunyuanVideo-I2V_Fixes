@@ -45,6 +45,8 @@ def main():
         i2v_mode=args.i2v_mode,
         i2v_resolution=args.i2v_resolution,
         i2v_image_path=args.i2v_image_path,
+        i2v_condition_type=args.i2v_condition_type,
+        i2v_stability=args.i2v_stability
     )
     samples = outputs['samples']
     

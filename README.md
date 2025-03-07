@@ -42,6 +42,7 @@ This repo contains offical PyTorch model definitions, pre-trained weights and in
 
 
 ## 🔥🔥🔥 News!!
+* Mar 07, 2025: 🔥 We have fixed the bug in our open-source version that caused ID changes. Please try the new model weights of [HunyuanVideo-I2V](https://huggingface.co/tencent/HunyuanVideo-I2V) to ensure full visual consistency in the first frame and produce higher quality videos. 
 * Mar 06, 2025: 👋 We release the inference code and model weights of HunyuanVideo-I2V. [Download](https://github.com/Tencent/HunyuanVideo-I2V/blob/main/ckpts/README.md).
 
 
@@ -53,7 +54,12 @@ This repo contains offical PyTorch model definitions, pre-trained weights and in
   <p>Co-creator @D-aiY Director Ding Yi</p>
 </div>
 
-### Customizable I2V LoRA Demo
+### Frist Frame Consistency Demo
+|  Reference Image | Generated Video  |Reference Image | Generated Video  |Reference Image | Generated Video  |
+|:----------------:|:----------------:|:----------------:|:----------------:|:----------------:|:----------------:|
+|        <img src="https://github.com/user-attachments/assets/83e7a097-ffca-40db-9c72-be01d866aa7d" width="80%">         |       <video src="https://github.com/user-attachments/assets/f81d2c88-bb1a-43f8-b40f-1ccc20774563" width="100%"> </video>        |       <img src="https://github.com/user-attachments/assets/c385a11f-60c7-4919-b0f1-bc5e715f673c" width="50%">         |       <video src="https://github.com/user-attachments/assets/0c29ede9-0481-4d40-9c67-a4b6267fdc2d" width="100%"> </video>        | <img src="https://github.com/user-attachments/assets/5763f5eb-0be5-4b36-866a-5199e31c5802" width="95%">         |       <video src="https://github.com/user-attachments/assets/a8da0a1b-ba7d-45a4-a901-5d213ceaf50e" width="100%"> </video>        |
+
+<!-- ### Customizable I2V LoRA Demo
 
 | I2V Lora Effect |  Reference Image | Generated Video  |
 |:---------------:|:--------------------------------:|:----------------:|
@@ -74,16 +80,16 @@ This repo contains offical PyTorch model definitions, pre-trained weights and in
 - Enhance-A-Video (Better Generated Video for Free): [Enhance-A-Video](https://github.com/NUS-HPC-AI-Lab/Enhance-A-Video) by [NUS-HPC-AI-Lab](https://ai.comp.nus.edu.sg/)
 - TeaCache (Cache-based Accelerate): [TeaCache](https://github.com/LiewFeng/TeaCache) by [Feng Liu](https://github.com/LiewFeng)
 - HunyuanVideoGP (GPU Poor version): [HunyuanVideoGP](https://github.com/deepbeepmeep/HunyuanVideoGP) by [DeepBeepMeep](https://github.com/deepbeepmeep)
- -->
+ --> 
 
 
 
 ## 📑 Open-source Plan
 - HunyuanVideo-I2V (Image-to-Video Model)
-  - [x] Lora training scripts
   - [x] Inference 
   - [x] Checkpoints
   - [x] ComfyUI
+  - [ ] Lora training scripts
   - [ ] Multi-gpus Sequence Parallel inference (Faster inference speed on more gpus)
   - [ ] Diffusers 
   - [ ] FP8 Quantified weight
@@ -93,7 +99,7 @@ This repo contains offical PyTorch model definitions, pre-trained weights and in
   - [🔥🔥🔥 News!!](#-news)
   - [🎥 Demo](#-demo)
     - [I2V Demo](#i2v-demo)
-    - [Customizable I2V LoRA Demo](#customizable-i2v-lora-demo)
+    - [Frist Frame Consistency Demo](#frist-frame-consistency-demo)
   - [📑 Open-source Plan](#-open-source-plan)
   - [Contents](#contents)
   - [**HunyuanVideo-I2V Overall Architecture**](#hunyuanvideo-i2v-overall-architecture)
@@ -105,18 +111,12 @@ This repo contains offical PyTorch model definitions, pre-trained weights and in
     - [Tips for Using Image-to-Video Models](#tips-for-using-image-to-video-models)
     - [Using Command Line](#using-command-line)
     - [More Configurations](#more-configurations)
-  - [🎉 Customizable I2V LoRA effects training](#-customizable-i2v-lora-effects-training)
-    - [Requirements](#requirements)
-    - [Environment](#environment)
-    - [Training data construction](#training-data-construction)
-    - [Training](#training)
-    - [Inference](#inference)
   - [🔗 BibTeX](#-bibtex)
   - [Acknowledgements](#acknowledgements)
 ---
 
 ## **HunyuanVideo-I2V Overall Architecture**
-Leveraging the advanced video generation capabilities of [HunyuanVideo](https://github.com/Tencent/HunyuanVideo), we have extended its application to image-to-video generation tasks. To achieve this, we employ an image latent concatenation technique to effectively reconstruct and incorporate reference image information into the video generation process.
+Leveraging the advanced video generation capabilities of [HunyuanVideo](https://github.com/Tencent/HunyuanVideo), we have extended its application to image-to-video generation tasks. To achieve this, we employ a token replace technique to effectively reconstruct and incorporate reference image information into the video generation process.
 
 Since we utilizes a pre-trained Multimodal Large Language Model (MLLM) with a Decoder-Only architecture as the text encoder, we can significantly enhance the model's ability to comprehend the semantic content of the input image and to seamlessly integrate information from both the image and its associated caption. Specifically, the input image is processed by the MLLM to generate semantic image tokens. These tokens are then concatenated with the video latent tokens, enabling comprehensive full-attention computation across the combined data.
 
@@ -212,12 +212,6 @@ Similar to [HunyuanVideo](https://github.com/Tencent/HunyuanVideo), HunyuanVideo
   - **Camera Angle (Optional)**: Indicate the perspective or viewpoint.
 - **Avoid Overly Detailed Prompts**: Lengthy or highly detailed prompts can lead to unnecessary transitions in the video output.
 
-For example:
-1. A man with short gray hair plays a red electric guitar.
-2. A woman sits on a wooden floor, holding a colorful bag.
-3. A bee flaps its wings. The camera movement is Zoom Out/Zoom In/Pan Right.
-4. A little boy closes his mouth, stands up, and lifts his left hand. The background is blurred.
-
 <!-- **For image-to-video models, we recommend using concise prompts to guide the model's generation process. A good prompt should include elements such as background, main subject, action, and camera angle. Overly long or excessively detailed prompts may introduce unnecessary transitions.** -->
 
 ### Using Command Line
@@ -266,7 +260,7 @@ We list some more useful configurations for easy usage:
 |     `--save-path`      |         ./results             |         Path to save the generated video.                     |
 
 
-## 🎉 Customizable I2V LoRA effects training
+<!-- ## 🎉 Customizable I2V LoRA effects training
 
 ### Requirements
 
@@ -336,7 +330,7 @@ We list some lora specific configurations for easy usage:
 |:-------------------:|:-------:|:----------------------------:|
 |    `--use-lora`     |  False  |  Whether to open lora mode.  |
 |   `--lora-scale`    |   1.0   | Fusion scale for lora model. |
-|   `--lora-path`     |   ""    |  Weight path for lora model. |
+|   `--lora-path`     |   ""    |  Weight path for lora model. | -->
 
 
 ## 🔗 BibTeX

@@ -136,6 +136,7 @@ class TextEncoder(nn.Module):
         reproduce: bool = False,
         logger=None,
         device=None,
+        image_embed_interleave=None,
     ):
         super().__init__()
         self.text_encoder_type = text_encoder_type
@@ -163,6 +164,7 @@ class TextEncoder(nn.Module):
         self.i2v_mode = i2v_mode
         self.reproduce = reproduce
         self.logger = logger
+        self.image_embed_interleave = image_embed_interleave
 
         self.use_template = self.prompt_template is not None
         if self.use_template:
@@ -297,7 +299,6 @@ class TextEncoder(nn.Module):
         return_texts=False,
         data_type="image",
         semantic_images=None,
-        image_embed_interleave=2,
         device=None,
     ):
         """
@@ -313,7 +314,6 @@ class TextEncoder(nn.Module):
             hidden_state_skip_layer (int): Number of hidden states to hidden_state_skip_layer. 0 means the last layer.
                 If None, self.output_key will be used. Defaults to None.
             hidden_state_skip_layer (PIL.Image): The reference images for i2v models.
-            image_embed_interleave (int): The number of times to interleave the image and text embeddings. Defaults to 2.
             return_texts (bool): Whether to return the decoded texts. Defaults to False.
         """
         device = self.model.device if device is None else device
@@ -491,12 +491,12 @@ class TextEncoder(nn.Module):
                 image_last_hidden_state = torch.stack(image_last_hidden_state)
                 image_attention_mask = torch.stack(image_attention_mask)
 
-                if semantic_images is not None and 0 < image_embed_interleave < 6:
+                if semantic_images is not None and 0 < self.image_embed_interleave < 6:
                     image_last_hidden_state = image_last_hidden_state[
-                        :, ::image_embed_interleave, :
+                        :, ::self.image_embed_interleave, :
                     ]
                     image_attention_mask = image_attention_mask[
-                        :, ::image_embed_interleave
+                        :, ::self.image_embed_interleave
                     ]
 
                 assert (

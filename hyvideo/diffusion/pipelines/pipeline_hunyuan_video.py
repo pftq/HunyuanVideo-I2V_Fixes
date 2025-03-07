@@ -576,8 +576,10 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         latents=None,
         img_latents=None,
         i2v_mode=False,
+        i2v_condition_type=None,
+        i2v_stability=True,
     ):
-        if i2v_mode:
+        if i2v_mode and i2v_condition_type == "latent_concat":
             num_channels_latents = (num_channels_latents - 1) // 2
         shape = (
             batch_size,
@@ -592,7 +594,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                 f" size of {batch_size}. Make sure the batch size matches the length of the generators."
             )
 
-        if i2v_mode:
+        if i2v_mode and i2v_stability:
             if img_latents.shape[2] == 1:
                 img_latents = img_latents.repeat(1, 1, video_length, 1, 1)
             x0 = randn_tensor(shape, generator=generator, device=device, dtype=dtype)
@@ -722,6 +724,8 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         n_tokens: Optional[int] = None,
         embedded_guidance_scale: Optional[float] = None,
         i2v_mode: bool = False,
+        i2v_condition_type: str = None,
+        i2v_stability: bool = True,
         img_latents: Optional[torch.Tensor] = None,
         semantic_images=None,
         **kwargs,
@@ -963,9 +967,11 @@ class HunyuanVideoPipeline(DiffusionPipeline):
             latents,
             img_latents=img_latents,
             i2v_mode=i2v_mode,
+            i2v_condition_type=i2v_condition_type,
+            i2v_stability=i2v_stability
         )
 
-        if i2v_mode:
+        if i2v_mode and i2v_condition_type == "latent_concat":
             if img_latents.shape[2] == 1:
                 img_latents_concat = img_latents.repeat(1, 1, video_length, 1, 1)
             else:
@@ -1004,8 +1010,11 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                 if self.interrupt:
                     continue
 
+                if i2v_mode and i2v_condition_type == "token_replace":
+                    latents = torch.concat([img_latents, latents[:, :, 1:, :, :]], dim=2)
+
                 # expand the latents if we are doing classifier free guidance
-                if i2v_mode:
+                if i2v_mode and i2v_condition_type == "latent_concat":
                     latent_model_input = torch.concat([latents, img_latents_concat, mask_concat], dim=1)
                 else:
                     latent_model_input = latents
@@ -1066,9 +1075,17 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                     )
 
                 # compute the previous noisy sample x_t -> x_t-1
-                latents = self.scheduler.step(
-                    noise_pred, t, latents, **extra_step_kwargs, return_dict=False
-                )[0]
+                if i2v_mode and i2v_condition_type == "token_replace":
+                    latents = self.scheduler.step(
+                        noise_pred[:, :, 1:, :, :], t, latents[:, :, 1:, :, :], **extra_step_kwargs, return_dict=False
+                    )[0]
+                    latents = torch.concat(
+                        [img_latents, latents], dim=2
+                    )
+                else:
+                    latents = self.scheduler.step(
+                        noise_pred, t, latents, **extra_step_kwargs, return_dict=False
+                    )[0]
 
                 if callback_on_step_end is not None:
                     callback_kwargs = {}
@@ -1139,7 +1156,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         # we always cast to float32 as this does not cause significant overhead and is compatible with bfloa16
         image = image.cpu().float()
 
-        if i2v_mode:
+        if i2v_mode and i2v_condition_type == "latent_concat":
             image = image[:, :, 4:, :, :]
 
         # Offload all models

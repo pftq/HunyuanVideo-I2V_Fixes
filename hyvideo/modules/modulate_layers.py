@@ -2,7 +2,7 @@ from typing import Callable
 
 import torch
 import torch.nn as nn
-
+import math
 
 class ModulateDiT(nn.Module):
     """Modulation layer for DiT."""
@@ -24,11 +24,19 @@ class ModulateDiT(nn.Module):
         nn.init.zeros_(self.linear.weight)
         nn.init.zeros_(self.linear.bias)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.linear(self.act(x))
+    def forward(self, x: torch.Tensor, condition_type=None, token_replace_vec=None) -> torch.Tensor:
 
+        x_out = self.linear(self.act(x))
 
-def modulate(x, shift=None, scale=None):
+        if condition_type == "token_replace":
+            x_token_replace_out = self.linear(self.act(token_replace_vec))
+            return x_out, x_token_replace_out
+        else:
+            return x_out
+
+def modulate(x, shift=None, scale=None, condition_type=None,
+             tr_shift=None, tr_scale=None,
+             frist_frame_token_num=None):
     """modulate by shift and scale
 
     Args:
@@ -39,17 +47,23 @@ def modulate(x, shift=None, scale=None):
     Returns:
         torch.Tensor: the output tensor after modulate.
     """
-    if scale is None and shift is None:
+    if condition_type == "token_replace":
+        x_zero = x[:, :frist_frame_token_num] * (1 + tr_scale.unsqueeze(1)) + tr_shift.unsqueeze(1)
+        x_orig = x[:, frist_frame_token_num:] * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+        x = torch.concat((x_zero, x_orig), dim=1)
         return x
-    elif shift is None:
-        return x * (1 + scale.unsqueeze(1))
-    elif scale is None:
-        return x + shift.unsqueeze(1)
     else:
-        return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+        if scale is None and shift is None:
+            return x
+        elif shift is None:
+            return x * (1 + scale.unsqueeze(1))
+        elif scale is None:
+            return x + shift.unsqueeze(1)
+        else:
+            return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
 
 
-def apply_gate(x, gate=None, tanh=False):
+def apply_gate(x, gate=None, tanh=False, condition_type=None, tr_gate=None, frist_frame_token_num=None):
     """AI is creating summary for apply_gate
 
     Args:
@@ -60,12 +74,26 @@ def apply_gate(x, gate=None, tanh=False):
     Returns:
         torch.Tensor: the output tensor after apply gate.
     """
-    if gate is None:
-        return x
-    if tanh:
-        return x * gate.unsqueeze(1).tanh()
+    if condition_type == "token_replace":
+        if gate is None:
+            return x
+        if tanh:
+            x_zero = x[:, :frist_frame_token_num] * tr_gate.unsqueeze(1).tanh()
+            x_orig = x[:, frist_frame_token_num:] * gate.unsqueeze(1).tanh()
+            x = torch.concat((x_zero, x_orig), dim=1)
+            return x
+        else:
+            x_zero = x[:, :frist_frame_token_num] * tr_gate.unsqueeze(1)
+            x_orig = x[:, frist_frame_token_num:] * gate.unsqueeze(1)
+            x = torch.concat((x_zero, x_orig), dim=1)
+            return x
     else:
-        return x * gate.unsqueeze(1)
+        if gate is None:
+            return x
+        if tanh:
+            return x * gate.unsqueeze(1).tanh()
+        else:
+            return x * gate.unsqueeze(1)
 
 
 def ckpt_wrapper(module):
