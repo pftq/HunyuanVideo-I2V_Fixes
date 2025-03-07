@@ -225,41 +225,65 @@ python3 gradio_server.py --flow-reverse
 # set SERVER_NAME and SERVER_PORT manually
 # SERVER_NAME=0.0.0.0 SERVER_PORT=8081 python3 gradio_server.py --flow-reverse
 ``` -->
+If you want to generate a more **stable** video, you can set `--i2v-stability` and `--flow-shift 7.0`. Execute the command as follows
 ```bash
 cd HunyuanVideo-I2V
 
 python3 sample_image2video.py \
+    --prompt "An Asian man with short hair in black tactical uniform and white clothes waves a firework stick." \
+    --i2v-image-path ./demo/imgs/0.jpg \
     --model HYVideo-T/2 \
-    --prompt "A man with short gray hair plays a red electric guitar." \
     --i2v-mode \
-    --i2v-image-path ./assets/demo/i2v/imgs/0.png \
     --i2v-resolution 720p \
-    --video-length 129 \
+    --i2v-stability \
     --infer-steps 50 \
+    --video-length 129 \
+    --flow-reverse \
+    --flow-shift 7.0 \
+    --seed 0 \
+    --embedded-cfg-scale 6.0 \
+    --use-cpu-offload \
+    --save-path ./results
+```
+If you want to generate a more **high-dynamic** video, you can **unset** `--i2v-stability` and `--flow-shift 17.0`. Execute the command as follows
+```bash
+cd HunyuanVideo-I2V
+
+python3 sample_image2video.py \
+    --prompt "An Asian man with short hair in black tactical uniform and white clothes waves a firework stick." \
+    --i2v-image-path ./demo/imgs/0.jpg \
+    --model HYVideo-T/2 \
+    --i2v-mode \
+    --i2v-resolution 720p \
+    --infer-steps 50 \
+    --video-length 129 \
     --flow-reverse \
     --flow-shift 17.0 \
     --seed 0 \
+    --embedded-cfg-scale 6.0 \
     --use-cpu-offload \
-    --save-path ./results 
+    --save-path ./results
 ```
 ### More Configurations
 
 We list some more useful configurations for easy usage:
 
-|        Argument        |            Default            |                          Description                          |
-|:----------------------:|:-----------------------------:|:------------------------------------------------------------:|
-|       `--prompt`       |             None              |           The text prompt for video generation.               |
-|       `--model`        |      HYVideo-T/2-cfgdistill   | Here we use HYVideo-T/2 for I2V, HYVideo-T/2-cfgdistill is used for T2V mode. |
-|     `--i2v-mode`       |            False              |                Whether to open i2v mode.                      |
-|  `--i2v-image-path`    | ./assets/demo/i2v/imgs/0.png  |        The reference image for video generation.              |
-|  `--i2v-resolution`    |            720p               |        The resolution for the generated video.                |
-|    `--video-length`    |             129               |         The length of the generated video.                    |
-|    `--infer-steps`     |              50               |         The number of steps for sampling.                     |
-|     `--flow-shift`     |             7.0               |     Shift factor for flow matching schedulers .               |
-|   `--flow-reverse`     |            False              | If reverse, learning/sampling from t=1 -> t=0.                |
-|        `--seed`        |             None              | The random seed for generating video, if None, we init a random seed. |
-|  `--use-cpu-offload`   |            False              | Use CPU offload for the model load to save more memory, necessary for high-res video generation. |
-|     `--save-path`      |         ./results             |         Path to save the generated video.                     |
+|        Argument        |           Default            |                                           Description                                            |
+|:----------------------:|:----------------------------:|:------------------------------------------------------------------------------------------------:|
+|       `--prompt`       |             None             |                              The text prompt for video generation.                               |
+|       `--model`        |    HYVideo-T/2-cfgdistill    |          Here we use HYVideo-T/2 for I2V, HYVideo-T/2-cfgdistill is used for T2V mode.           |
+|     `--i2v-mode`       |            False             |                                    Whether to open i2v mode.                                     |
+|  `--i2v-image-path`    | ./assets/demo/i2v/imgs/0.png |                            The reference image for video generation.                             |
+|  `--i2v-resolution`    |             720p             |                             The resolution for the generated video.                              |
+|  `--i2v-stability`    |            False             |                          Whether to use stable mode for i2v inference.                           |
+|    `--video-length`    |             129              |                                The length of the generated video.                                |
+|    `--infer-steps`     |              50              |                                The number of steps for sampling.                                 |
+|     `--flow-shift`     |             7.0              |                           Shift factor for flow matching schedulers .                            |
+|   `--flow-reverse`     |            False             |                          If reverse, learning/sampling from t=1 -> t=0.                          |
+|        `--seed`        |             None             |              The random seed for generating video, if None, we init a random seed.               |
+|  `--use-cpu-offload`   |            False             | Use CPU offload for the model load to save more memory, necessary for high-res video generation. |
+|     `--save-path`      |          ./results           |                                Path to save the generated video.                                 |
+
 
 
 <!-- ## 🎉 Customizable I2V LoRA effects training
