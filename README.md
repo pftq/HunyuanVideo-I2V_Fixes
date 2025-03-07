@@ -268,21 +268,21 @@ python3 sample_image2video.py \
 
 We list some more useful configurations for easy usage:
 
-|        Argument        |           Default            |                                           Description                                            |
-|:----------------------:|:----------------------------:|:------------------------------------------------------------------------------------------------:|
-|       `--prompt`       |             None             |                              The text prompt for video generation.                               |
-|       `--model`        |    HYVideo-T/2-cfgdistill    |          Here we use HYVideo-T/2 for I2V, HYVideo-T/2-cfgdistill is used for T2V mode.           |
-|     `--i2v-mode`       |            False             |                                    Whether to open i2v mode.                                     |
-|  `--i2v-image-path`    | ./assets/demo/i2v/imgs/0.png |                            The reference image for video generation.                             |
-|  `--i2v-resolution`    |             720p             |                             The resolution for the generated video.                              |
-|  `--i2v-stability`    |            False             |                          Whether to use stable mode for i2v inference.                           |
-|    `--video-length`    |             129              |                                The length of the generated video.                                |
-|    `--infer-steps`     |              50              |                                The number of steps for sampling.                                 |
-|     `--flow-shift`     |             7.0              |                           Shift factor for flow matching schedulers .                            |
-|   `--flow-reverse`     |            False             |                          If reverse, learning/sampling from t=1 -> t=0.                          |
-|        `--seed`        |             None             |              The random seed for generating video, if None, we init a random seed.               |
-|  `--use-cpu-offload`   |            False             | Use CPU offload for the model load to save more memory, necessary for high-res video generation. |
-|     `--save-path`      |          ./results           |                                Path to save the generated video.                                 |
+|        Argument        |           Default            |                                                                                        Description                                                                                        |
+|:----------------------:|:----------------------------:|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
+|       `--prompt`       |             None             |                                                                           The text prompt for video generation.                                                                           |
+|       `--model`        |    HYVideo-T/2-cfgdistill    |                                                       Here we use HYVideo-T/2 for I2V, HYVideo-T/2-cfgdistill is used for T2V mode.                                                       |
+|     `--i2v-mode`       |            False             |                                                                                 Whether to open i2v mode.                                                                                 |
+|  `--i2v-image-path`    | ./assets/demo/i2v/imgs/0.png |                                                                         The reference image for video generation.                                                                         |
+|  `--i2v-resolution`    |             720p             |                                                                          The resolution for the generated video.                                                                          |
+|  `--i2v-stability`    |            False             |                                                                       Whether to use stable mode for i2v inference.                                                                       |
+|    `--video-length`    |             129              |                                                                            The length of the generated video.                                                                             |
+|    `--infer-steps`     |              50              |                                                                             The number of steps for sampling.                                                                             |
+|     `--flow-shift`     |             7.0              | Shift factor for flow matching schedulers. We recommend 7 with `--i2v-stability` switch on for more stable video, 17 with `--i2v-stability` switch off for more dynamic video |
+|   `--flow-reverse`     |            False             |                                                                      If reverse, learning/sampling from t=1 -> t=0.                                                                       |
+|        `--seed`        |             None             |                                             The random seed for generating video, if None, we init a random seed.                                                                         |
+|  `--use-cpu-offload`   |            False             |                                             Use CPU offload for the model load to save more memory, necessary for high-res video generation.                                              |
+|     `--save-path`      |          ./results           |                                                                             Path to save the generated video.                                                                             |
 
 
 
