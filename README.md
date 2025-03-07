@@ -55,9 +55,11 @@ This repo contains offical PyTorch model definitions, pre-trained weights and in
 </div>
 
 ### Frist Frame Consistency Demo
-|  Reference Image | Generated Video  |Reference Image | Generated Video  |Reference Image | Generated Video  |
-|:----------------:|:----------------:|:----------------:|:----------------:|:----------------:|:----------------:|
-|        <img src="https://github.com/user-attachments/assets/83e7a097-ffca-40db-9c72-be01d866aa7d" width="80%">         |       <video src="https://github.com/user-attachments/assets/f81d2c88-bb1a-43f8-b40f-1ccc20774563" width="100%"> </video>        |       <img src="https://github.com/user-attachments/assets/c385a11f-60c7-4919-b0f1-bc5e715f673c" width="50%">         |       <video src="https://github.com/user-attachments/assets/0c29ede9-0481-4d40-9c67-a4b6267fdc2d" width="100%"> </video>        | <img src="https://github.com/user-attachments/assets/5763f5eb-0be5-4b36-866a-5199e31c5802" width="95%">         |       <video src="https://github.com/user-attachments/assets/a8da0a1b-ba7d-45a4-a901-5d213ceaf50e" width="100%"> </video>        |
+|  Reference Image | Generated Video  |
+|:----------------:|:----------------:|
+|  <img src="https://github.com/user-attachments/assets/83e7a097-ffca-40db-9c72-be01d866aa7d" width="80%">   |       <video src="https://github.com/user-attachments/assets/f81d2c88-bb1a-43f8-b40f-1ccc20774563" width="100%"> </video>        | 
+｜ <img src="https://github.com/user-attachments/assets/c385a11f-60c7-4919-b0f1-bc5e715f673c" width="50%">         |       <video src="https://github.com/user-attachments/assets/0c29ede9-0481-4d40-9c67-a4b6267fdc2d" width="100%"> </video>        | 
+｜ <img src="https://github.com/user-attachments/assets/5763f5eb-0be5-4b36-866a-5199e31c5802" width="95%">         |       <video src="https://github.com/user-attachments/assets/a8da0a1b-ba7d-45a4-a901-5d213ceaf50e" width="100%"> </video>        |
 
 <!-- ### Customizable I2V LoRA Demo
 
