@@ -2,7 +2,7 @@
 
 python3 sample_image2video.py \
     --prompt "An Asian man with short hair in black tactical uniform and white clothes waves a firework stick." \
-    --i2v-image-path ./demo/imgs/0.jpg \
+    --i2v-image-path ./assets/demo/i2v/imgs/0.jpg \
     --model HYVideo-T/2 \
     --i2v-mode \
     --i2v-resolution 720p \
@@ -17,4 +17,4 @@ python3 sample_image2video.py \
 
 # More example
 #    --prompt "A girl walks on the road, shooting stars pass by." \
-#    --i2v-image-path ./demo/imgs/1.png \
+#    --i2v-image-path ./assets/demo/i2v/imgs/1.png \

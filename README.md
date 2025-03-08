@@ -231,7 +231,7 @@ cd HunyuanVideo-I2V
 
 python3 sample_image2video.py \
     --prompt "An Asian man with short hair in black tactical uniform and white clothes waves a firework stick." \
-    --i2v-image-path ./demo/imgs/0.jpg \
+    --i2v-image-path ./assets/demo/i2v/imgs/0.jpg \
     --model HYVideo-T/2 \
     --i2v-mode \
     --i2v-resolution 720p \
@@ -251,7 +251,7 @@ cd HunyuanVideo-I2V
 
 python3 sample_image2video.py \
     --prompt "An Asian man with short hair in black tactical uniform and white clothes waves a firework stick." \
-    --i2v-image-path ./demo/imgs/0.jpg \
+    --i2v-image-path ./assets/demo/i2v/imgs/0.jpg \
     --model HYVideo-T/2 \
     --i2v-mode \
     --i2v-resolution 720p \
@@ -273,7 +273,7 @@ We list some more useful configurations for easy usage:
 |       `--prompt`       |             None             |                                                                           The text prompt for video generation.                                                                           |
 |       `--model`        |    HYVideo-T/2-cfgdistill    |                                                       Here we use HYVideo-T/2 for I2V, HYVideo-T/2-cfgdistill is used for T2V mode.                                                       |
 |     `--i2v-mode`       |            False             |                                                                                 Whether to open i2v mode.                                                                                 |
-|  `--i2v-image-path`    | ./assets/demo/i2v/imgs/0.png |                                                                         The reference image for video generation.                                                                         |
+|  `--i2v-image-path`    | ./assets/demo/i2v/imgs/0.jpg |                                                                         The reference image for video generation.                                                                         |
 |  `--i2v-resolution`    |             720p             |                                                                          The resolution for the generated video.                                                                          |
 |  `--i2v-stability`    |            False             |                                                                       Whether to use stable mode for i2v inference.                                                                       |
 |    `--video-length`    |             129              |                                                                            The length of the generated video.                                                                             |
