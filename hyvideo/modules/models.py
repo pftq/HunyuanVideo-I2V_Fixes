@@ -701,8 +701,6 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
         else:
             token_replace_vec = None
             frist_frame_token_num = None
-            # token_replace_mask_img = None
-            # token_replace_mask_txt = None
 
         # text modulation
         vec_2 = self.vector_in(text_states_2)

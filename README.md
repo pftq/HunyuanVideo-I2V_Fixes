@@ -61,14 +61,12 @@ This repo contains offical PyTorch model definitions, pre-trained weights and in
 ｜ <img src="https://github.com/user-attachments/assets/c385a11f-60c7-4919-b0f1-bc5e715f673c" width="80%">         |       <video src="https://github.com/user-attachments/assets/0c29ede9-0481-4d40-9c67-a4b6267fdc2d" width="100%"> </video>        | 
 ｜ <img src="https://github.com/user-attachments/assets/5763f5eb-0be5-4b36-866a-5199e31c5802" width="95%">         |       <video src="https://github.com/user-attachments/assets/a8da0a1b-ba7d-45a4-a901-5d213ceaf50e" width="100%"> </video>        |
 
-<!-- ### Customizable I2V LoRA Demo
+### Customizable I2V LoRA Demo
 
 | I2V Lora Effect |  Reference Image | Generated Video  |
 |:---------------:|:--------------------------------:|:----------------:|
 |   Hair growth   |        <img src="./assets/demo/i2v_lora/imgs/hair_growth.png" width="40%">         |       <video src="https://github.com/user-attachments/assets/06b998ae-bbde-4c1f-96cb-a25a9197d5cb" width="100%"> </video>        |
 |     Embrace     |      <img src="./assets/demo/i2v_lora/imgs/embrace.png" width="40%">          |       <video src="https://github.com/user-attachments/assets/f8c99eb1-2a43-489a-ba02-6bd50a6dd260" width="100%" > </video>        |
-<!-- |   Hair growth   |        <img src="./assets/demo/i2v_lora/imgs/hair_growth.png" width="40%">         |       <video src="https://github.com/user-attachments/assets/06b998ae-bbde-4c1f-96cb-a25a9197d5cb" width="100%" poster="./assets/demo/i2v_lora/imgs/hair_growth.png"> </video>        |
-|     Embrace     |      <img src="./assets/demo/i2v_lora/imgs/embrace.png" width="40%">          |       <video src="https://github.com/user-attachments/assets/f8c99eb1-2a43-489a-ba02-6bd50a6dd260" width="100%" poster="./assets/demo/i2v_lora/imgs/hair_growth.png"> </video>        | -->
 
 <!-- ## 🧩 Community Contributions -->
 
@@ -91,7 +89,7 @@ This repo contains offical PyTorch model definitions, pre-trained weights and in
   - [x] Inference 
   - [x] Checkpoints
   - [x] ComfyUI
-  - [ ] Lora training scripts
+  - [x] Lora training scripts
   - [ ] Multi-gpus Sequence Parallel inference (Faster inference speed on more gpus)
   - [ ] Diffusers 
   - [ ] FP8 Quantified weight
@@ -113,6 +111,12 @@ This repo contains offical PyTorch model definitions, pre-trained weights and in
     - [Tips for Using Image-to-Video Models](#tips-for-using-image-to-video-models)
     - [Using Command Line](#using-command-line)
     - [More Configurations](#more-configurations)
+  - [🎉 Customizable I2V LoRA effects training](#-customizable-i2v-lora-effects-training)
+    - [Requirements](#requirements)
+    - [Environment](#environment)
+    - [Training data construction](#training-data-construction)
+    - [Training](#training)
+    - [Inference](#inference)
   - [🔗 BibTeX](#-bibtex)
   - [Acknowledgements](#acknowledgements)
 ---
@@ -230,10 +234,10 @@ If you want to generate a more **stable** video, you can set `--i2v-stability` a
 cd HunyuanVideo-I2V
 
 python3 sample_image2video.py \
-    --prompt "An Asian man with short hair in black tactical uniform and white clothes waves a firework stick." \
-    --i2v-image-path ./assets/demo/i2v/imgs/0.jpg \
     --model HYVideo-T/2 \
+    --prompt "An Asian man with short hair in black tactical uniform and white clothes waves a firework stick." \
     --i2v-mode \
+    --i2v-image-path ./assets/demo/i2v/imgs/0.jpg \
     --i2v-resolution 720p \
     --i2v-stability \
     --infer-steps 50 \
@@ -250,17 +254,17 @@ If you want to generate a more **high-dynamic** video, you can **unset** `--i2v-
 cd HunyuanVideo-I2V
 
 python3 sample_image2video.py \
-    --prompt "An Asian man with short hair in black tactical uniform and white clothes waves a firework stick." \
-    --i2v-image-path ./assets/demo/i2v/imgs/0.jpg \
     --model HYVideo-T/2 \
+    --prompt "An Asian man with short hair in black tactical uniform and white clothes waves a firework stick." \
     --i2v-mode \
+    --i2v-image-path ./assets/demo/i2v/imgs/0.jpg \
     --i2v-resolution 720p \
     --infer-steps 50 \
     --video-length 129 \
     --flow-reverse \
     --flow-shift 17.0 \
-    --seed 0 \
     --embedded-cfg-scale 6.0 \
+    --seed 0 \
     --use-cpu-offload \
     --save-path ./results
 ```
@@ -286,7 +290,7 @@ We list some more useful configurations for easy usage:
 
 
 
-<!-- ## 🎉 Customizable I2V LoRA effects training
+## 🎉 Customizable I2V LoRA effects training
 
 ### Requirements
 
@@ -313,11 +317,13 @@ Prompt description: The trigger word is written directly in the video caption. I
 
 For example, AI hair growth effect (trigger): rapid_hair_growth, The hair of the characters in the video is growing rapidly. + original prompt
 
-After having the training video and prompt pair, refer to [here](hyvideo/hyvae_extract/README.md) for training data construction.
+After having the training video and prompt pair, refer to [here] (hyvideo/hyvae_extract/README.md) for training data construction.
 
 
 ### Training
 ```
+cd HunyuanVideo-I2V
+
 sh scripts/run_train_image2video_lora.sh
 ```
 We list some training specific configurations for easy usage:
@@ -333,22 +339,26 @@ After training, you can find `pytorch_lora_kohaya_weights.safetensors` in `{SAVE
 
 ### Inference
 ```bash
+cd HunyuanVideo-I2V
+
 python3 sample_image2video.py \
-    --model HYVideo-T/2 \
-    --prompt "Two people hugged tightly, In the video, two people are standing apart from each other. They then move closer to each other and begin to hug tightly. The hug is very affectionate, with the two people holding each other tightly and looking into each other's eyes. The interaction is very emotional and heartwarming, with the two people expressing their love and affection for each other." \
-    --i2v-mode \
-    --i2v-image-path ./assets/demo/i2v_lora/imgs/embrace.png \
-    --i2v-resolution 720p \
-    --infer-steps 50 \
-    --video-length 129 \
-    --flow-reverse \
-    --flow-shift 5.0 \
-    --seed 0 \
-    --use-cpu-offload \
-    --save-path ./results \
-    --use-lora \
-    --lora-scale 1.0 \
-    --lora-path ./ckpts/hunyuan-video-i2v-720p/lora/embrace_kohaya_weights.safetensors
+   --model HYVideo-T/2 \
+   --prompt "Two people hugged tightly, In the video, two people are standing apart from each other. They then move closer to each other and begin to hug tightly. The hug is very affectionate, with the two people holding each other tightly and looking into each other's eyes. The interaction is very emotional and heartwarming, with the two people expressing their love and affection for each other." \
+   --i2v-mode \
+   --i2v-image-path ./assets/demo/i2v_lora/imgs/embrace.png \
+   --i2v-resolution 720p \
+   --i2v-stability \
+   --infer-steps 50 \
+   --video-length 129 \
+   --flow-reverse \
+   --flow-shift 5.0 \
+   --embedded-cfg-scale 6.0 \
+   --seed 0 \
+   --use-cpu-offload \
+   --save-path ./results \
+   --use-lora \
+   --lora-scale 1.0 \
+   --lora-path ./ckpts/hunyuan-video-i2v-720p/lora/embrace_kohaya_weights.safetensors
 ```
 We list some lora specific configurations for easy usage:
 
@@ -356,7 +366,7 @@ We list some lora specific configurations for easy usage:
 |:-------------------:|:-------:|:----------------------------:|
 |    `--use-lora`     |  False  |  Whether to open lora mode.  |
 |   `--lora-scale`    |   1.0   | Fusion scale for lora model. |
-|   `--lora-path`     |   ""    |  Weight path for lora model. | -->
+|   `--lora-path`     |   ""    |  Weight path for lora model. |
 
 
 ## 🔗 BibTeX

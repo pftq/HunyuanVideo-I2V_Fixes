@@ -413,18 +413,15 @@ class TextEncoder(nn.Module):
                         last_double_return_token_indices = torch.cat(
                             (
                                 last_double_return_token_indices,
-                                torch.tensor([batch_encoding["input_ids"].shape[-1]]),
+                                torch.tensor([batch_encoding["input_ids"].shape[-1]]).to(
+                                    device=last_double_return_token_indices.device),
                             )
                         )
-                        batch_indices = torch.cat((batch_indices, torch.tensor([0])))
                     last_double_return_token_indices = (
                         last_double_return_token_indices.reshape(
                             batch_encoding["input_ids"].shape[0], -1
                         )[:, -1]
                     )
-                    batch_indices = batch_indices.reshape(
-                        batch_encoding["input_ids"].shape[0], -1
-                    )[:, -1]
                     assistant_crop_start = (
                         last_double_return_token_indices
                         - 1

@@ -11,8 +11,8 @@ python3 sample_image2video.py \
     --video-length 129 \
     --flow-reverse \
     --flow-shift 7.0 \
-    --seed 0 \
     --embedded-cfg-scale 6.0 \
+    --seed 0 \
     --use-cpu-offload \
     --save-path ./results \
 

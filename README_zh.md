@@ -52,19 +52,19 @@
 ｜ <img src="https://github.com/user-attachments/assets/5763f5eb-0be5-4b36-866a-5199e31c5802" width="95%">         |       <video src="https://github.com/user-attachments/assets/a8da0a1b-ba7d-45a4-a901-5d213ceaf50e" width="100%"> </video>        |
 
 
-<!-- ### 定制化I2V LoRA效果演示
+### 定制化I2V LoRA效果演示
 
 | 特效类型       |  参考图像  | 生成视频  |
 |:---------------:|:--------------------------------:|:----------------:|
 |   头发生长   |        <img src="./assets/demo/i2v_lora/imgs/hair_growth.png" width="40%">         |       <video src="https://github.com/user-attachments/assets/06b998ae-bbde-4c1f-96cb-a25a9197d5cb" width="100%"> </video>        |
-|     拥抱     |      <img src="./assets/demo/i2v_lora/imgs/embrace.png" width="40%">          |       <video src="https://github.com/user-attachments/assets/f8c99eb1-2a43-489a-ba02-6bd50a6dd260" width="100%" > </video>        | -->
+|     拥抱     |      <img src="./assets/demo/i2v_lora/imgs/embrace.png" width="40%">          |       <video src="https://github.com/user-attachments/assets/f8c99eb1-2a43-489a-ba02-6bd50a6dd260" width="100%" > </video>        |
 
 ## 📑 开源计划
 - HunyuanVideo-I2V（图像到视频模型）
   - [x] 推理代码
   - [x] 模型权重
   - [x] ComfyUI支持
-  - [ ] LoRA训练脚本
+  - [x] LoRA训练脚本
   - [ ] 多GPU序列并行推理（提升多卡推理速度）
   - [ ] Diffusers集成 
   - [ ] FP8量化权重
@@ -86,6 +86,12 @@
     - [使用图生视频模型的建议](#使用图生视频模型的建议)
     - [使用命令行](#使用命令行)
     - [更多配置](#更多配置)
+  - [🎉自定义 I2V LoRA 效果训练](#自定义-i2v-lora-效果训练)
+    - [要求](#要求)
+    - [训练环境](#训练环境)
+    - [训练数据构建](#训练数据构建)
+    - [开始训练](#开始训练)
+    - [推理](#推理)
   - [🔗 BibTeX](#-bibtex)
   - [致谢](#致谢)
 
@@ -181,23 +187,44 @@ docker run -itd --gpus all --init --net=host --uts=host --ipc=host --name hunyua
 - **避免过于详细的提示**：冗长或高度详细的提示可能会导致视频输出中出现不必要的转场。
 
 ### 使用命令行
-
+如果想生成更**稳定**的视频，可以设置`--i2v-stability`和`--flow-shift 7.0`。执行命令如下
 ```bash
 cd HunyuanVideo-I2V
 
 python3 sample_image2video.py \
     --model HYVideo-T/2 \
-    --prompt "A man with short gray hair plays a red electric guitar." \
+    --prompt "An Asian man with short hair in black tactical uniform and white clothes waves a firework stick." \
     --i2v-mode \
-    --i2v-image-path ./assets/demo/i2v/imgs/0.png \
+    --i2v-image-path ./assets/demo/i2v/imgs/0.jpg \
     --i2v-resolution 720p \
-    --video-length 129 \
+    --i2v-stability \
     --infer-steps 50 \
+    --video-length 129 \
+    --flow-reverse \
+    --flow-shift 7.0 \
+    --seed 0 \
+    --embedded-cfg-scale 6.0 \
+    --use-cpu-offload \
+    --save-path ./results
+```
+如果想要生成更**高动态**的视频，可以**取消设置**`--i2v-stability`和`--flow-shift 17.0`。执行命令如下
+```bash
+cd HunyuanVideo-I2V
+
+python3 sample_image2video.py \
+    --model HYVideo-T/2 \
+    --prompt "An Asian man with short hair in black tactical uniform and white clothes waves a firework stick." \
+    --i2v-mode \
+    --i2v-image-path ./assets/demo/i2v/imgs/0.jpg \
+    --i2v-resolution 720p \
+    --infer-steps 50 \
+    --video-length 129 \
     --flow-reverse \
     --flow-shift 17.0 \
+    --embedded-cfg-scale 6.0 \
     --seed 0 \
     --use-cpu-offload \
-    --save-path ./results 
+    --save-path ./results
 ```
 <!-- # ### 运行gradio服务
 # ```bash
@@ -211,23 +238,24 @@ python3 sample_image2video.py \
 
 我们列出了一些常用的配置以方便使用：
 
-|        参数        |            默认            |                          描述                          |
-|:----------------------:|:-----------------------------:|:------------------------------------------------------------:|
-|       `--prompt`       |             None              |           用于视频生成的文本提示。               |
-|       `--model`        |      HYVideo-T/2-cfgdistill   | 这里我们使用 HYVideo-T/2 用于 I2V，HYVideo-T/2-cfgdistill 用于 T2V 模式。 |
-|     `--i2v-mode`       |            False              |                是否开启 I2V 模式。                      |
-|  `--i2v-image-path`    | ./assets/demo/i2v/imgs/0.png  |        用于视频生成的参考图像。              |
-|  `--i2v-resolution`    |            720p               |        生成视频的分辨率。                |
-|    `--video-length`    |             129               |         生成视频的长度。                    |
-|    `--infer-steps`     |              50               |         采样步骤的数量。                     |
-|     `--flow-shift`     |             7.0               |     流匹配调度器的偏移因子。               |
-|   `--flow-reverse`     |            False              | 如果反转，从 t=1 学习/采样到 t=0。                |
-|        `--seed`        |             None              | 生成视频的随机种子，如果为 None，则初始化一个随机种子。 |
-|  `--use-cpu-offload`   |            False              | 使用 CPU 卸载模型加载以节省更多内存，对于高分辨率视频生成是必要的。 |
-|     `--save-path`      |         ./results             |         保存生成视频的路径。                     |
+|        参数        |            默认            |                                                                 描述                                                                 |
+|:----------------------:|:-----------------------------:|:----------------------------------------------------------------------------------------------------------------------------------:|
+|       `--prompt`       |             None              |                                                            用于视频生成的文本提示。                                                            |
+|       `--model`        |      HYVideo-T/2-cfgdistill   |                                    这里我们使用 HYVideo-T/2 用于 I2V，HYVideo-T/2-cfgdistill 用于 T2V 模式。                                     |
+|     `--i2v-mode`       |            False              |                                                            是否开启 I2V 模式。                                                            |
+|  `--i2v-image-path`    | ./assets/demo/i2v/imgs/0.png  |                                                            用于视频生成的参考图像。                                                            |
+|  `--i2v-resolution`    |            720p               |                                                             生成视频的分辨率。                                                              |
+|  `--i2v-stability`    |            False             |                                                         是否使用稳定模式进行 i2v 推理。                                                         |
+|    `--video-length`    |             129               |                                                              生成视频的长度。                                                              |
+|    `--infer-steps`     |              50               |                                                              采样步骤的数量。                                                              |
+|     `--flow-shift`     |             7.0               |                        流匹配调度器的偏移因子。我们建议将`--i2v-stability`设置为 7，以获得更稳定的视频；将`--i2v-stability`设置为 17，以获得更动态的视频                         |
+|   `--flow-reverse`     |            False              |                                                       如果反转，从 t=1 学习/采样到 t=0。                                                       |
+|        `--seed`        |             None              |                                                   生成视频的随机种子，如果为 None，则初始化一个随机种子。                                                   |
+|  `--use-cpu-offload`   |            False              |                                                使用 CPU 卸载模型加载以节省更多内存，对于高分辨率视频生成是必要的。                                                |
+|     `--save-path`      |         ./results             |                                                             保存生成视频的路径。                                                             |
 
 
-<!-- ## 🎉自定义 I2V LoRA 效果训练
+## 🎉自定义 I2V LoRA 效果训练
 
 ###  要求
 
@@ -242,7 +270,7 @@ python3 sample_image2video.py \
   * **最低要求**: 生成 360p 视频所需的最小 GPU 内存为 79GB。
   * **推荐**: 建议使用 80GB 内存的 GPU 以获得更好的生成质量。
 * 测试操作系统: Linux
-* 注意: 您可以使用 360p 数据进行训练，并直接推断 540p 视频
+* 注意: 您可以使用 360p 数据进行训练，并直接推理 720p 视频
 
 ### 训练环境
 ```
@@ -259,6 +287,8 @@ pip install -r requirements.txt
 
 ### 开始训练
 ```
+cd HunyuanVideo-I2V
+
 sh scripts/run_train_image2video_lora.sh
 ```
 我们列出了一些训练特定配置以方便使用：
@@ -268,26 +298,30 @@ sh scripts/run_train_image2video_lora.sh
 |   `SAVE_BASE`    |                               .                               |         保存实验结果的根路径。          |
 |    `EXP_NAME`    |                           i2v_lora                            |        保存实验结果的路径后缀。         |
 | `DATA_JSONS_DIR` | ./assets/demo/i2v_lora/train_dataset/processed_data/json_path | 由 hyvideo/hyvae_extract/start.sh 生成的数据 jsons 目录。 |
-|    `CHIEF_IP`    |                            0.0.0.0                            |            主节点 IP 地址。                   |
+|    `CHIEF_IP`    |                            127.0.0.1                            |            主节点 IP 地址。                   |
 
 ### 推理
 ```bash
+cd HunyuanVideo-I2V
+
 python3 sample_image2video.py \
-    --model HYVideo-T/2 \
-    --prompt "Two people hugged tightly, In the video, two people are standing apart from each other. They then move closer to each other and begin to hug tightly. The hug is very affectionate, with the two people holding each other tightly and looking into each other's eyes. The interaction is very emotional and heartwarming, with the two people expressing their love and affection for each other." \
-    --i2v-mode \
-    --i2v-image-path ./assets/demo/i2v_lora/imgs/embrace.png \
-    --i2v-resolution 540p \
-    --infer-steps 50 \
-    --video-length 129 \
-    --flow-reverse \
-    --flow-shift 5.0 \
-    --seed 0 \
-    --use-cpu-offload \
-    --save-path ./results \
-    --use-lora \
-    --lora-scale 1.0 \
-    --lora-path ./ckpts/hunyuan-video-i2v-720p/lora/embrace_kohaya_weights.safetensors \
+   --model HYVideo-T/2 \
+   --prompt "Two people hugged tightly, In the video, two people are standing apart from each other. They then move closer to each other and begin to hug tightly. The hug is very affectionate, with the two people holding each other tightly and looking into each other's eyes. The interaction is very emotional and heartwarming, with the two people expressing their love and affection for each other." \
+   --i2v-mode \
+   --i2v-image-path ./assets/demo/i2v_lora/imgs/embrace.png \
+   --i2v-resolution 720p \
+   --i2v-stability \
+   --infer-steps 50 \
+   --video-length 129 \
+   --flow-reverse \
+   --flow-shift 5.0 \
+   --embedded-cfg-scale 6.0 \
+   --seed 0 \
+   --use-cpu-offload \
+   --save-path ./results \
+   --use-lora \
+   --lora-scale 1.0 \
+   --lora-path ./ckpts/hunyuan-video-i2v-720p/lora/embrace_kohaya_weights.safetensors
 ```
 我们列出了一些 LoRA 特定配置以方便使用：
 
@@ -295,7 +329,7 @@ python3 sample_image2video.py \
 |:-------------------:|:-------:|:----------------------------:|
 |    `--use-lora`     |  None   |  是否开启 LoRA 模式。  |
 |   `--lora-scale`    |   1.0   | LoRA 模型的融合比例。 |
-|   `--lora-path`     |   ""    |  LoRA 模型的权重路径。 | -->
+|   `--lora-path`     |   ""    |  LoRA 模型的权重路径。 |
 
 ## 🔗 BibTeX
 

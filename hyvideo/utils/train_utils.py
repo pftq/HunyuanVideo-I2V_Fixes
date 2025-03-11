@@ -353,7 +353,7 @@ def prepare_model_inputs(
         return_dict=True,
     )
 
-    return latents, model_kwargs, freqs_cos.shape[0], kwargs["type"][0], cond_latents
+    return latents, model_kwargs, freqs_cos.shape[0], cond_latents
 
 
 def format_params(params):

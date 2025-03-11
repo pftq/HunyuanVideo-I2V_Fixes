@@ -161,19 +161,9 @@ class Transport:
             return t * self.training_timesteps
 
     def training_losses(self, model, x1, model_kwargs=None, timestep=None, n_tokens=None,
-                        data_type="video", i2v_mode=False, cond_latents=None, args=None):
-        """Loss for training the score model
-        Args:
-            model: backbone model; could be score, noise, or velocity
-            x1: datapoint
-            model_kwargs: additional arguments for the model
-            timestep: the timestep at which to evaluate loss.
-            n_tokens: number of tokens for shift
-        """
-        if data_type == "image":
-            self.shift = self.image_shift
-        elif data_type == "video":
-            self.shift = self.video_shift
+                        i2v_mode=False, cond_latents=None, args=None):
+
+        self.shift = self.video_shift
         if model_kwargs == None:
             model_kwargs = {}
 
@@ -183,7 +173,7 @@ class Transport:
         t, xt, ut = self.path_sampler.plan(t, x0, x1)
         input_t = self.get_model_t(t)
 
-        if i2v_mode:
+        if i2v_mode and args.i2v_condition_type == "latent_concat":
             if cond_latents is not None:
                 x1_concat = cond_latents.repeat(1,1,x1.shape[2],1,1)
                 x1_concat[:, :, 1:, :, :] = 0.0
@@ -195,11 +185,13 @@ class Transport:
             mask_concat[:, :, 1:, ...] = 0.0
 
             xt = th.concat([xt, x1_concat, mask_concat], dim=1)
+        elif i2v_mode and args.i2v_condition_type == "token_replace":
+            xt = th.concat([cond_latents, xt[:, :, 1:, :, :]], dim=2)
 
         guidance_expand = (
-            torch.tensor(
+            th.tensor(
                 [args.embedded_cfg_scale] * x1.shape[0],
-                dtype=torch.float32,
+                dtype=th.float32,
                 device=x1.device,
             ).to(PRECISION_TO_TYPE[args.precision])
             * 1000.0
@@ -209,7 +201,12 @@ class Transport:
         model_kwargs["guidance"] = guidance_expand
 
         model_output = model(xt, input_t, **model_kwargs)['x']
-        
+
+        if i2v_mode and args.i2v_condition_type == "token_replace":
+            assert self.model_type == ModelType.VELOCITY, f"self.model_type: {self.model_type} must be ModelType.VELOCITY"
+            model_output = model_output[:, :, 1:, :, :]
+            ut = ut[:, :, 1:, :, :]
+
         if not i2v_mode:
             assert model_output.size() == xt.size(), f"Output shape from model does not match input shape: " \
                                                  f"{model_output.size()} != {xt.size()}"
