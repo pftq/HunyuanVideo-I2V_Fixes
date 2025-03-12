@@ -100,6 +100,7 @@ This repo contains offical PyTorch model definitions, pre-trained weights and in
   - [🎥 Demo](#-demo)
     - [I2V Demo](#i2v-demo)
     - [Frist Frame Consistency Demo](#frist-frame-consistency-demo)
+    - [Customizable I2V LoRA Demo](#customizable-i2v-lora-demo)
   - [📑 Open-source Plan](#-open-source-plan)
   - [Contents](#contents)
   - [**HunyuanVideo-I2V Overall Architecture**](#hunyuanvideo-i2v-overall-architecture)
@@ -194,8 +195,8 @@ Additionally, HunyuanVideo-I2V also provides a pre-built Docker image. Use the f
 
 ```shell
 # For CUDA 12.4 (updated to avoid float point exception)
-docker pull hunyuanvideo/hunyuanvideo-i2v:cuda_12
-docker run -itd --gpus all --init --net=host --uts=host --ipc=host --name hunyuanvideo-i2v --security-opt=seccomp=unconfined --ulimit=stack=67108864 --ulimit=memlock=-1 --privileged hunyuanvideo/hunyuanvideo-i2v:cuda_12
+docker pull hunyuanvideo/hunyuanvideo-i2v:cuda12
+docker run -itd --gpus all --init --net=host --uts=host --ipc=host --name hunyuanvideo-i2v --security-opt=seccomp=unconfined --ulimit=stack=67108864 --ulimit=memlock=-1 --privileged hunyuanvideo/hunyuanvideo-i2v:cuda12
 ```
 
 
