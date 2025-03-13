@@ -55,7 +55,7 @@ This repo contains official PyTorch model definitions, pre-trained weights and i
   <p>Co-creator @D-aiY Director Ding Yi</p>
 </div>
 
-### Frist Frame Consistency Demo
+### First Frame Consistency Demo
 |  Reference Image | Generated Video  |
 |:----------------:|:----------------:|
 |  <img src="https://github.com/user-attachments/assets/83e7a097-ffca-40db-9c72-be01d866aa7d" width="80%">   |       <video src="https://github.com/user-attachments/assets/f81d2c88-bb1a-43f8-b40f-1ccc20774563" width="100%"> </video>        | 
