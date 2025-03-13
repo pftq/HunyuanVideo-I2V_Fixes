@@ -35,7 +35,7 @@
 
 Following the great successful open-sourcing of our [HunyuanVideo](https://github.com/Tencent/HunyuanVideo), we proudly present the [HunyuanVideo-I2V](https://github.com/Tencent/HunyuanVideo-I2V), a new image-to-video generation framework to accelerate open-source community exploration!
 
-This repo contains offical PyTorch model definitions, pre-trained weights and inference/sampling code. You can find more visualizations on our [project page](https://aivideo.hunyuan.tencent.com). Meanwhile, we have released the LoRA training code for customizable special effects, which can be used to create more interesting video effects.
+This repo contains official PyTorch model definitions, pre-trained weights and inference/sampling code. You can find more visualizations on our [project page](https://aivideo.hunyuan.tencent.com). Meanwhile, we have released the LoRA training code for customizable special effects, which can be used to create more interesting video effects.
 
 > [**HunyuanVideo: A Systematic Framework For Large Video Generation Model**](https://arxiv.org/abs/2412.03603) <be>
 
