@@ -43,6 +43,7 @@ This repo contains official PyTorch model definitions, pre-trained weights and i
 
 ## 🔥🔥🔥 News!!
 * Mar 13, 2025: 🚀 We release the parallel inference code for HunyuanVideo-I2V powered by [xDiT](https://github.com/xdit-project/xDiT).
+* Mar 11, 2025: 🎉 We have updated the lora training and inference code after fixing the bug.
 * Mar 07, 2025: 🔥 We have fixed the bug in our open-source version that caused ID changes. Please try the new model weights of [HunyuanVideo-I2V](https://huggingface.co/tencent/HunyuanVideo-I2V) to ensure full visual consistency in the first frame and produce higher quality videos. 
 * Mar 06, 2025: 👋 We release the inference code and model weights of HunyuanVideo-I2V. [Download](https://github.com/Tencent/HunyuanVideo-I2V/blob/main/ckpts/README.md).
 
@@ -93,6 +94,7 @@ If you develop/use HunyuanVideo-I2V in your projects, welcome to let us know.
     - [I2V Demo](#i2v-demo)
     - [Frist Frame Consistency Demo](#frist-frame-consistency-demo)
     - [Customizable I2V LoRA Demo](#customizable-i2v-lora-demo)
+  - [🧩 Community Contributions](#-community-contributions)
   - [📑 Open-source Plan](#-open-source-plan)
   - [Contents](#contents)
   - [**HunyuanVideo-I2V Overall Architecture**](#hunyuanvideo-i2v-overall-architecture)
