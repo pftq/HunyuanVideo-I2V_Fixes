@@ -567,14 +567,19 @@ def add_parallel_args(parser: argparse.ArgumentParser):
         "--ulysses-degree",
         type=int,
         default=1,
-        help="Ulysses degree.",
+        help="Ulysses degree for xdit parallel args.",
     )
     group.add_argument(
         "--ring-degree",
         type=int,
         default=1,
-        help="Ulysses degree.",
+        help="Ring degree for xdit parallel args.",
     )
+    group.add_argument(
+        "--xdit-adaptive-size",
+        action="store_true",
+        help="Make the generated video has no black padding.")
+
 
     return parser
 

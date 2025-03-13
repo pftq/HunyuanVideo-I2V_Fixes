@@ -47,9 +47,18 @@ def get_closest_ratio(height: float, width: float, ratios: list, buckets: list):
         the closest ratio in the buckets and the corresponding ratio
     """
     aspect_ratio = float(height) / float(width)
-    closest_ratio_id = np.abs(ratios - aspect_ratio).argmin()
-    closest_ratio = min(ratios, key=lambda ratio: abs(float(ratio) - aspect_ratio))
-    return buckets[closest_ratio_id], float(closest_ratio)
+    diff_ratios = ratios - aspect_ratio
+
+    if aspect_ratio >= 1:
+        indices = [(index, x) for index, x in enumerate(diff_ratios) if x <= 0]
+    else:
+        indices = [(index, x) for index, x in enumerate(diff_ratios) if x > 0]
+
+    closest_ratio_id = min(indices, key=lambda pair: abs(pair[1]))[0]
+    closest_size = buckets[closest_ratio_id]
+    closest_ratio = ratios[closest_ratio_id]
+
+    return closest_size, closest_ratio
 
 
 def generate_crop_size_list(base_size=256, patch_size=32, max_ratio=4.0):

@@ -46,7 +46,10 @@ def main():
         i2v_resolution=args.i2v_resolution,
         i2v_image_path=args.i2v_image_path,
         i2v_condition_type=args.i2v_condition_type,
-        i2v_stability=args.i2v_stability
+        i2v_stability=args.i2v_stability,
+        ulysses_degree=args.ulysses_degree,
+        ring_degree=args.ring_degree,
+        xdit_adaptive_size=args.xdit_adaptive_size
     )
     samples = outputs['samples']
     

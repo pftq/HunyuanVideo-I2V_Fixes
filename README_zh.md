@@ -34,8 +34,9 @@
 > [**HunyuanVideo: A Systematic Framework For Large Video Generation Model**](https://arxiv.org/abs/2412.03603)
 
 ## 🔥🔥🔥 最新动态
-* 2025年3月7日: 🔥 我们已经修复了开源版本中导致ID变化的bug，请尝试[HunyuanVideo-I2V](https://huggingface.co/tencent/HunyuanVideo-I2V)新的模型权重，以确保首帧完全视觉一致性，并制作更高质量的视频。
-* 2025年3月6日: 👋 发布HunyuanVideo-I2V的推理代码和模型权重。[下载地址](https://github.com/Tencent/HunyuanVideo-I2V/blob/main/ckpts/README.md)
+* 2025年03月13日: 🚀 开源 HunyuanVideo-I2V 多卡并行推理代码，由[xDiT](https://github.com/xdit-project/xDiT)提供。
+* 2025年03月07日: 🔥 我们已经修复了开源版本中导致ID变化的bug，请尝试[HunyuanVideo-I2V](https://huggingface.co/tencent/HunyuanVideo-I2V)新的模型权重，以确保首帧完全视觉一致性，并制作更高质量的视频。
+* 2025年03月06日: 👋 发布HunyuanVideo-I2V的推理代码和模型权重。[下载地址](https://github.com/Tencent/HunyuanVideo-I2V/blob/main/ckpts/README.md)
 
 ## 🎥 演示
 ### I2V 示例
@@ -66,16 +67,14 @@
 - ComfyUI (支持FP8推理、V2V和IP2V生成): [ComfyUI-HunyuanVideoWrapper](https://github.com/kijai/ComfyUI-HunyuanVideoWrapper) by [Kijai](https://github.com/kijai)
 - HunyuanVideoGP (针对低性能GPU的版本): [HunyuanVideoGP](https://github.com/deepbeepmeep/HunyuanVideoGP) by [DeepBeepMeep](https://github.com/deepbeepmeep)
 
-
 ## 📑 开源计划
 - HunyuanVideo-I2V（图像到视频模型）
   - [x] 推理代码
   - [x] 模型权重
   - [x] ComfyUI支持
   - [x] LoRA训练脚本
-  - [ ] 多GPU序列并行推理（提升多卡推理速度）
-  - [ ] Diffusers集成 
-  - [ ] FP8量化权重
+  - [x] 多GPU序列并行推理（提升多卡推理速度）
+  - [ ] Diffusers集成
 
 ## 目录
 - [**HunyuanVideo-I2V** 🌅](#hunyuanvideo-i2v-)
@@ -83,6 +82,7 @@
   - [🎥 演示](#-演示)
     - [I2V 示例](#i2v-示例)
     - [首帧一致性示例](#首帧一致性示例)
+    - [定制化I2V LoRA效果演示](#定制化i2v-lora效果演示)
   - [📑 开源计划](#-开源计划)
   - [目录](#目录)
   - [**HunyuanVideo-I2V 整体架构**](#hunyuanvideo-i2v-整体架构)
@@ -100,6 +100,8 @@
     - [训练数据构建](#训练数据构建)
     - [开始训练](#开始训练)
     - [推理](#推理)
+  - [🚀 使用 xDiT 实现多卡并行推理](#-使用-xdit-实现多卡并行推理)
+    - [使用命令行](#使用命令行-1)
   - [🔗 BibTeX](#-bibtex)
   - [致谢](#致谢)
 
@@ -160,6 +162,9 @@ python -m pip install -r requirements.txt
 # 5. 安装flash attention v2加速（需CUDA 11.8及以上）
 python -m pip install ninja
 python -m pip install git+https://github.com/Dao-AILab/flash-attention.git@v2.6.3
+
+# 6. Install xDiT for parallel inference (It is recommended to use torch 2.4.0 and flash-attn 2.6.3)
+python -m pip install xfuser==0.4.0
 ```
 
 如果在特定 GPU 型号上遭遇 float point exception(core dump) 问题，可尝试以下方案修复：
@@ -173,8 +178,8 @@ export LD_LIBRARY_PATH=/opt/conda/lib/python3.8/site-packages/nvidia/cublas/lib/
 另外，我们提供了一个预构建的 Docker 镜像，可以使用如下命令进行拉取和运行。
 ```shell
 # CUDA 12.4镜像（避免浮点异常）
-docker pull hunyuanvideo/hunyuanvideo-i2v:cuda_12
-docker run -itd --gpus all --init --net=host --uts=host --ipc=host --name hunyuanvideo-i2v --security-opt=seccomp=unconfined --ulimit=stack=67108864 --ulimit=memlock=-1 --privileged hunyuanvideo/hunyuanvideo-i2v:cuda_12
+docker pull hunyuanvideo/hunyuanvideo-i2v:cuda12
+docker run -itd --gpus all --init --net=host --uts=host --ipc=host --name hunyuanvideo-i2v --security-opt=seccomp=unconfined --ulimit=stack=67108864 --ulimit=memlock=-1 --privileged hunyuanvideo/hunyuanvideo-i2v:cuda12
 ```
 
 ## 🧱 下载预训练模型
@@ -338,6 +343,98 @@ python3 sample_image2video.py \
 |    `--use-lora`     |  None   |  是否开启 LoRA 模式。  |
 |   `--lora-scale`    |   1.0   | LoRA 模型的融合比例。 |
 |   `--lora-path`     |   ""    |  LoRA 模型的权重路径。 |
+
+## 🚀 使用 xDiT 实现多卡并行推理
+
+[xDiT](https://github.com/xdit-project/xDiT) 是一个针对多 GPU 集群的扩展推理引擎，用于扩展 Transformers（DiTs）。
+它成功为各种 DiT 模型（包括 mochi-1、CogVideoX、Flux.1、SD3 等）提供了低延迟的并行推理解决方案。该存储库采用了 [Unified Sequence Parallelism (USP)](https://arxiv.org/abs/2405.07719) API 用于混元视频模型的并行推理。
+
+### 使用命令行
+
+例如，可用如下命令使用8张GPU卡完成推理
+
+```bash
+cd HunyuanVideo-I2V
+
+torchrun --nproc_per_node=8 sample_image2video.py \
+    --model HYVideo-T/2 \
+    --prompt "An Asian man with short hair in black tactical uniform and white clothes waves a firework stick." \
+    --i2v-mode \
+    --i2v-image-path ./assets/demo/i2v/imgs/0.jpg \
+    --i2v-resolution 720p \
+    --i2v-stability \
+    --infer-steps 50 \
+    --video-length 129 \
+    --flow-reverse \
+    --flow-shift 7.0 \
+    --seed 0 \
+    --embedded-cfg-scale 6.0 \
+    --save-path ./results \
+    --ulysses-degree 8 \
+    --ring-degree 1 \
+    --video-size 1280 720 \
+    --xdit-adaptive-size
+```
+
+可以配置`--ulysses-degree`和`--ring-degree`来控制并行配置，
+注意，你需要设置 `--video-size`，因为 xDiT 的加速机制对要生成的视频的长宽有要求。
+为了防止将原始图像高度/宽度转换为目标高度/宽度后出现黑色填充，你可以使用 `--xdit-adaptive-size`。
+具体的可选参数如下。
+
+<details>
+<summary>支持的并行配置 (点击查看详情)</summary>
+
+|     --video-size     | --video-length | --ulysses-degree x --ring-degree | --nproc_per_node |
+|----------------------|----------------|----------------------------------|------------------|
+| 1280 720 或 720 1280 | 129            | 8x1,4x2,2x4,1x8                  | 8                |
+| 1280 720 或 720 1280 | 129            | 1x5                              | 5                |
+| 1280 720 或 720 1280 | 129            | 4x1,2x2,1x4                      | 4                |
+| 1280 720 或 720 1280 | 129            | 3x1,1x3                          | 3                |
+| 1280 720 或 720 1280 | 129            | 2x1,1x2                          | 2                |
+| 1104 832 或 832 1104 | 129            | 4x1,2x2,1x4                      | 4                |
+| 1104 832 或 832 1104 | 129            | 3x1,1x3                          | 3                |
+| 1104 832 或 832 1104 | 129            | 2x1,1x2                          | 2                |
+| 960 960              | 129            | 6x1,3x2,2x3,1x6                  | 6                |
+| 960 960              | 129            | 4x1,2x2,1x4                      | 4                |
+| 960 960              | 129            | 3x1,1x3                          | 3                |
+| 960 960              | 129            | 1x2,2x1                          | 2                |
+| 960 544 或 544 960   | 129            | 6x1,3x2,2x3,1x6                  | 6                |
+| 960 544 或 544 960   | 129            | 4x1,2x2,1x4                      | 4                |
+| 960 544 或 544 960   | 129            | 3x1,1x3                          | 3                |
+| 960 544 或 544 960   | 129            | 1x2,2x1                          | 2                |
+| 832 624 或 624 832   | 129            | 4x1,2x2,1x4                      | 4                |
+| 624 832 或 624 832   | 129            | 3x1,1x3                          | 3                |
+| 832 624 或 624 832   | 129            | 2x1,1x2                          | 2                |
+| 720 720              | 129            | 1x5                              | 5                |
+| 720 720              | 129            | 3x1,1x3                          | 3                |
+
+</details>
+
+<p align="center">
+<table align="center">
+<thead>
+<tr>
+    <th colspan="4">在 8xGPU上生成1280x720 (129 帧 50 步)的时耗 (秒)  </th>
+</tr>
+<tr>
+    <th>1</th>
+    <th>2</th>
+    <th>4</th>
+    <th>8</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+    <th>1904.08</th>
+    <th>934.09 (2.04x)</th>
+    <th>514.08 (3.70x)</th>
+    <th>337.58 (5.64x)</th>
+</tr>
+
+</tbody>
+</table>
+</p>
+
 
 ## 🔗 BibTeX
 

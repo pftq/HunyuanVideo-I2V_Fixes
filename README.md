@@ -42,6 +42,7 @@ This repo contains offical PyTorch model definitions, pre-trained weights and in
 
 
 ## 🔥🔥🔥 News!!
+* Mar 13, 2025: 🚀 We release the parallel inference code for HunyuanVideo-I2V powered by [xDiT](https://github.com/xdit-project/xDiT).
 * Mar 07, 2025: 🔥 We have fixed the bug in our open-source version that caused ID changes. Please try the new model weights of [HunyuanVideo-I2V](https://huggingface.co/tencent/HunyuanVideo-I2V) to ensure full visual consistency in the first frame and produce higher quality videos. 
 * Mar 06, 2025: 👋 We release the inference code and model weights of HunyuanVideo-I2V. [Download](https://github.com/Tencent/HunyuanVideo-I2V/blob/main/ckpts/README.md).
 
@@ -76,16 +77,14 @@ If you develop/use HunyuanVideo-I2V in your projects, welcome to let us know.
 - HunyuanVideoGP (GPU Poor version): [HunyuanVideoGP](https://github.com/deepbeepmeep/HunyuanVideoGP) by [DeepBeepMeep](https://github.com/deepbeepmeep)
 
 
-
 ## 📑 Open-source Plan
 - HunyuanVideo-I2V (Image-to-Video Model)
   - [x] Inference 
   - [x] Checkpoints
   - [x] ComfyUI
   - [x] Lora training scripts
-  - [ ] Multi-gpus Sequence Parallel inference (Faster inference speed on more gpus)
-  - [ ] Diffusers 
-  - [ ] FP8 Quantified weight
+  - [x] Multi-gpus Sequence Parallel inference (Faster inference speed on more gpus)
+  - [ ] Diffusers
 
 ## Contents
 - [**HunyuanVideo-I2V** 🌅](#hunyuanvideo-i2v-)
@@ -111,6 +110,8 @@ If you develop/use HunyuanVideo-I2V in your projects, welcome to let us know.
     - [Training data construction](#training-data-construction)
     - [Training](#training)
     - [Inference](#inference)
+  - [🚀 Parallel Inference on Multiple GPUs by xDiT](#-parallel-inference-on-multiple-gpus-by-xdit)
+    - [Using Command Line](#using-command-line-1)
   - [🔗 BibTeX](#-bibtex)
   - [Acknowledgements](#acknowledgements)
 ---
@@ -174,6 +175,9 @@ python -m pip install -r requirements.txt
 # 5. Install flash attention v2 for acceleration (requires CUDA 11.8 or above)
 python -m pip install ninja
 python -m pip install git+https://github.com/Dao-AILab/flash-attention.git@v2.6.3
+
+# 6. Install xDiT for parallel inference (It is recommended to use torch 2.4.0 and flash-attn 2.6.3)
+python -m pip install xfuser==0.4.0
 ```
 
 In case of running into float point exception(core dump) on the specific GPU type, you may try the following solutions:
@@ -361,6 +365,98 @@ We list some lora specific configurations for easy usage:
 |    `--use-lora`     |  False  |  Whether to open lora mode.  |
 |   `--lora-scale`    |   1.0   | Fusion scale for lora model. |
 |   `--lora-path`     |   ""    |  Weight path for lora model. |
+
+## 🚀 Parallel Inference on Multiple GPUs by xDiT
+
+[xDiT](https://github.com/xdit-project/xDiT) is a Scalable Inference Engine for Diffusion Transformers (DiTs) on multi-GPU Clusters.
+It has successfully provided low-latency parallel inference solutions for a variety of DiTs models, including mochi-1, CogVideoX, Flux.1, SD3, etc. This repo adopted the [Unified Sequence Parallelism (USP)](https://arxiv.org/abs/2405.07719) APIs for parallel inference of the HunyuanVideo-I2V model.
+
+### Using Command Line
+
+For example, to generate a video with 8 GPUs, you can use the following command:
+
+```bash
+cd HunyuanVideo-I2V
+
+torchrun --nproc_per_node=8 sample_image2video.py \
+    --model HYVideo-T/2 \
+    --prompt "An Asian man with short hair in black tactical uniform and white clothes waves a firework stick." \
+    --i2v-mode \
+    --i2v-image-path ./assets/demo/i2v/imgs/0.jpg \
+    --i2v-resolution 720p \
+    --i2v-stability \
+    --infer-steps 50 \
+    --video-length 129 \
+    --flow-reverse \
+    --flow-shift 7.0 \
+    --seed 0 \
+    --embedded-cfg-scale 6.0 \
+    --save-path ./results \
+    --ulysses-degree 8 \
+    --ring-degree 1 \
+    --video-size 1280 720 \
+    --xdit-adaptive-size
+```
+
+You can change the `--ulysses-degree` and `--ring-degree` to control the parallel configurations for the best performance. 
+Note that you need to set `--video-size` since xDiT's acceleration mechanism has requirements for the size of the video to be generated.
+To prevent black padding after converting the original image height/width to the target height/width, you can use `--xdit-adaptive-size`.
+The valid parallel configurations are shown in the following table.
+
+<details>
+<summary>Supported Parallel Configurations (Click to expand)</summary>
+
+|     --video-size     | --video-length | --ulysses-degree x --ring-degree | --nproc_per_node |
+|----------------------|----------------|----------------------------------|------------------|
+| 1280 720 or 720 1280 | 129            | 8x1,4x2,2x4,1x8                  | 8                |
+| 1280 720 or 720 1280 | 129            | 1x5                              | 5                |
+| 1280 720 or 720 1280 | 129            | 4x1,2x2,1x4                      | 4                |
+| 1280 720 or 720 1280 | 129            | 3x1,1x3                          | 3                |
+| 1280 720 or 720 1280 | 129            | 2x1,1x2                          | 2                |
+| 1104 832 or 832 1104 | 129            | 4x1,2x2,1x4                      | 4                |
+| 1104 832 or 832 1104 | 129            | 3x1,1x3                          | 3                |
+| 1104 832 or 832 1104 | 129            | 2x1,1x2                          | 2                |
+| 960 960              | 129            | 6x1,3x2,2x3,1x6                  | 6                |
+| 960 960              | 129            | 4x1,2x2,1x4                      | 4                |
+| 960 960              | 129            | 3x1,1x3                          | 3                |
+| 960 960              | 129            | 1x2,2x1                          | 2                |
+| 960 544 or 544 960   | 129            | 6x1,3x2,2x3,1x6                  | 6                |
+| 960 544 or 544 960   | 129            | 4x1,2x2,1x4                      | 4                |
+| 960 544 or 544 960   | 129            | 3x1,1x3                          | 3                |
+| 960 544 or 544 960   | 129            | 1x2,2x1                          | 2                |
+| 832 624 or 624 832   | 129            | 4x1,2x2,1x4                      | 4                |
+| 624 832 or 624 832   | 129            | 3x1,1x3                          | 3                |
+| 832 624 or 624 832   | 129            | 2x1,1x2                          | 2                |
+| 720 720              | 129            | 1x5                              | 5                |
+| 720 720              | 129            | 3x1,1x3                          | 3                |
+
+</details>
+
+
+<p align="center">
+<table align="center">
+<thead>
+<tr>
+    <th colspan="4">Latency (Sec) for 1280x720 (129 frames 50 steps) on 8xGPU</th>
+</tr>
+<tr>
+    <th>1</th>
+    <th>2</th>
+    <th>4</th>
+    <th>8</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+    <th>1904.08</th>
+    <th>934.09 (2.04x)</th>
+    <th>514.08 (3.70x)</th>
+    <th>337.58 (5.64x)</th>
+</tr>
+
+</tbody>
+</table>
+</p>
 
 
 ## 🔗 BibTeX

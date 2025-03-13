@@ -550,6 +550,9 @@ class HunyuanVideoSampler(Inference):
         i2v_image_path=None,
         i2v_condition_type=None,
         i2v_stability=True,
+        ulysses_degree=1,
+        ring_degree=1,
+        xdit_adaptive_size=True,
         **kwargs,
     ):
         """
@@ -572,6 +575,9 @@ class HunyuanVideoSampler(Inference):
                 i2v_mode (bool): Whether to open i2v mode. Default is False.
                 i2v_resolution (str): Resolution for i2v inference. Default is 720p.
                 i2v_image_path (str): Image path for i2v inference. Default is None.
+                ulysses_degree (int): Ulysses degree for xdit parallel args. Default is 1.
+                ring_degree (int): ring degree for xdit parallel args. Default is 1.
+                xdit_adaptive_size (bool): Make the generated video has no black padding. Default is True.
         """
         out_dict = dict()
 
@@ -683,9 +689,33 @@ class HunyuanVideoSampler(Inference):
             crop_size_list = generate_crop_size_list(bucket_hw_base_size, 32)
             aspect_ratios = np.array([round(float(h)/float(w), 5) for h, w in crop_size_list])
             closest_size, closest_ratio = get_closest_ratio(origin_size[1], origin_size[0], aspect_ratios, crop_size_list)
+
+            if ulysses_degree != 1 or ring_degree != 1:
+                closest_size = (height, width)
+                resize_param = min(closest_size)
+                center_crop_param = closest_size
+
+                # When calculating the scaling ratio, choose the larger ratio (max(scale_w, scale_h)) to ensure that at
+                # least one dimension of the image is greater than or equal to the target size.
+                if xdit_adaptive_size:
+                    original_h, original_w = origin_size[1], origin_size[0]
+                    target_h, target_w = height, width
+
+                    scale_w = target_w / original_w
+                    scale_h = target_h / original_h
+                    scale = max(scale_w, scale_h)
+
+                    new_w = int(original_w * scale)
+                    new_h = int(original_h * scale)
+                    resize_param = (new_h, new_w)
+                    center_crop_param = (target_h, target_w)
+            else:
+                resize_param = min(closest_size)
+                center_crop_param = closest_size
+
             ref_image_transform = transforms.Compose([
-                transforms.Resize(closest_size),
-                transforms.CenterCrop(closest_size),
+                transforms.Resize(resize_param),
+                transforms.CenterCrop(center_crop_param),
                 transforms.ToTensor(),
                 transforms.Normalize([0.5], [0.5])
             ])
@@ -724,6 +754,11 @@ class HunyuanVideoSampler(Inference):
                     flow_shift: {flow_shift}
        embedded_guidance_scale: {embedded_guidance_scale}
                  i2v_stability: {i2v_stability}"""
+        if ulysses_degree != 1 or ring_degree != 1:
+            debug_str += f"""
+                ulysses_degree: {ulysses_degree}
+                   ring_degree: {ring_degree}
+            xdit_adaptive_size: {xdit_adaptive_size}"""
         logger.debug(debug_str)
 
         # ========================================================================
