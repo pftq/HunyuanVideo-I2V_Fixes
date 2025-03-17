@@ -1,3 +1,6 @@
+# **Fixes/improvements to base Hunyuan I2V code**
+- Fixed multi-GPU slow model loading due to contention by using sequential loading + broadcasting. See: https://github.com/Tencent/HunyuanVideo-I2V/issues/36
+
 <!-- ## **HunyuanVideo** -->
 
 [中文阅读](./README_zh.md)
