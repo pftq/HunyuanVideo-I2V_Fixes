@@ -145,149 +145,230 @@ class Inference(object):
         self.logger = logger
         self.parallel_args = parallel_args
 
+    # 20250316 pftq: Fixed multi-GPU loading times going up to 20 min due to loading contention by loading models only to one GPU and braodcasting to the rest.
     @classmethod
     def from_pretrained(cls, pretrained_model_path, args, device=None, **kwargs):
         """
         Initialize the Inference pipeline.
-
+    
         Args:
             pretrained_model_path (str or pathlib.Path): The model path, including t2v, text encoder and vae checkpoints.
             args (argparse.Namespace): The arguments for the pipeline.
-            device (int): The device for inference. Default is 0.
+            device (int): The device for inference. Default is None.
         """
-        # ========================================================================
         logger.info(f"Got text-to-video model root path: {pretrained_model_path}")
         
-        # ==================== Initialize Distributed Environment ================
+        # ========================================================================
+        # Initialize Distributed Environment
+        # ========================================================================
+        # 20250316 pftq: Modified to extract rank and world_size early for sequential loading
         if args.ulysses_degree > 1 or args.ring_degree > 1:
-            assert xfuser is not None, \
-                "Ulysses Attention and Ring Attention requires xfuser package."
-
-            assert args.use_cpu_offload is False, \
-                "Cannot enable use_cpu_offload in the distributed environment."
-
-            dist.init_process_group("nccl")
-
-            assert dist.get_world_size() == args.ring_degree * args.ulysses_degree, \
+            assert xfuser is not None, "Ulysses Attention and Ring Attention requires xfuser package."
+            assert args.use_cpu_offload is False, "Cannot enable use_cpu_offload in the distributed environment."
+            # 20250316 pftq: Set local rank and device explicitly for NCCL
+            local_rank = int(os.environ['LOCAL_RANK'])
+            device = torch.device(f"cuda:{local_rank}")
+            torch.cuda.set_device(local_rank)  # 20250316 pftq: Set CUDA device explicitly
+            dist.init_process_group("nccl")  # 20250316 pftq: Removed device_id, rely on set_device
+            rank = dist.get_rank()
+            world_size = dist.get_world_size()
+            assert world_size == args.ring_degree * args.ulysses_degree, \
                 "number of GPUs should be equal to ring_degree * ulysses_degree."
-
-            init_distributed_environment(rank=dist.get_rank(), world_size=dist.get_world_size())
-            
+            init_distributed_environment(rank=rank, world_size=world_size)
             initialize_model_parallel(
-                sequence_parallel_degree=dist.get_world_size(),
+                sequence_parallel_degree=world_size,
                 ring_degree=args.ring_degree,
                 ulysses_degree=args.ulysses_degree,
             )
-            device = torch.device(f"cuda:{os.environ['LOCAL_RANK']}")
         else:
+            rank = 0  # 20250316 pftq: Default rank for single GPU
+            world_size = 1  # 20250316 pftq: Default world_size for single GPU
             if device is None:
                 device = "cuda" if torch.cuda.is_available() else "cpu"
-
+    
         parallel_args = {"ulysses_degree": args.ulysses_degree, "ring_degree": args.ring_degree}
-
-        # ======================== Get the args path =============================
-
-        # Disable gradient
         torch.set_grad_enabled(False)
-
-        # =========================== Build main model ===========================
-        logger.info("Building model...")
-        factor_kwargs = {"device": device, "dtype": PRECISION_TO_TYPE[args.precision]}
-        if args.i2v_mode and args.i2v_condition_type == "latent_concat":
-            in_channels = args.latent_channels * 2 + 1
-            image_embed_interleave = 2
-        elif args.i2v_mode and args.i2v_condition_type == "token_replace":
-            in_channels = args.latent_channels
-            image_embed_interleave = 4
-        else:
-            in_channels = args.latent_channels
-            image_embed_interleave = 1
-        out_channels = args.latent_channels
-
-        if args.embedded_cfg_scale:
-            factor_kwargs["guidance_embed"] = True
-
-        model = load_model(
-            args,
-            in_channels=in_channels,
-            out_channels=out_channels,
-            factor_kwargs=factor_kwargs,
-        )
-
-        if args.use_fp8:
-            convert_fp8_linear(model, args.dit_weight, original_dtype=PRECISION_TO_TYPE[args.precision])
-        model = model.to(device)
-        model = Inference.load_state_dict(args, model, pretrained_model_path)
-        model.eval()
-
-        # ============================= Build extra models ========================
-        # VAE
-        vae, _, s_ratio, t_ratio = load_vae(
-            args.vae,
-            args.vae_precision,
-            logger=logger,
-            device=device if not args.use_cpu_offload else "cpu",
-        )
-        vae_kwargs = {"s_ratio": s_ratio, "t_ratio": t_ratio}
-
-        # Text encoder
-        if args.i2v_mode:
-            args.text_encoder = "llm-i2v"
-            args.tokenizer = "llm-i2v"
-            args.prompt_template = "dit-llm-encode-i2v"
-            args.prompt_template_video = "dit-llm-encode-video-i2v"
-
-        if args.prompt_template_video is not None:
-            crop_start = PROMPT_TEMPLATE[args.prompt_template_video].get(
-                "crop_start", 0
+    
+        # ========================================================================
+        # Build main model, VAE, and text encoder sequentially on rank 0
+        # ========================================================================
+        # 20250316 pftq: Load models only on rank 0, then broadcast
+        if rank == 0:
+            logger.info("Building model...")
+            factor_kwargs = {"device": device, "dtype": PRECISION_TO_TYPE[args.precision]}
+            if args.i2v_mode and args.i2v_condition_type == "latent_concat":
+                in_channels = args.latent_channels * 2 + 1
+                image_embed_interleave = 2
+            elif args.i2v_mode and args.i2v_condition_type == "token_replace":
+                in_channels = args.latent_channels
+                image_embed_interleave = 4
+            else:
+                in_channels = args.latent_channels
+                image_embed_interleave = 1
+            out_channels = args.latent_channels
+    
+            if args.embedded_cfg_scale:
+                factor_kwargs["guidance_embed"] = True
+    
+            model = load_model(
+                args,
+                in_channels=in_channels,
+                out_channels=out_channels,
+                factor_kwargs=factor_kwargs,
             )
-        elif args.prompt_template is not None:
-            crop_start = PROMPT_TEMPLATE[args.prompt_template].get("crop_start", 0)
-        else:
-            crop_start = 0
-        max_length = args.text_len + crop_start
-
-        # prompt_template
-        prompt_template = (
-            PROMPT_TEMPLATE[args.prompt_template]
-            if args.prompt_template is not None
-            else None
-        )
-
-        # prompt_template_video
-        prompt_template_video = (
-            PROMPT_TEMPLATE[args.prompt_template_video]
-            if args.prompt_template_video is not None
-            else None
-        )
-
-        text_encoder = TextEncoder(
-            text_encoder_type=args.text_encoder,
-            max_length=max_length,
-            text_encoder_precision=args.text_encoder_precision,
-            tokenizer_type=args.tokenizer,
-            i2v_mode=args.i2v_mode,
-            prompt_template=prompt_template,
-            prompt_template_video=prompt_template_video,
-            hidden_state_skip_layer=args.hidden_state_skip_layer,
-            apply_final_norm=args.apply_final_norm,
-            reproduce=args.reproduce,
-            logger=logger,
-            device=device if not args.use_cpu_offload else "cpu",
-            image_embed_interleave=image_embed_interleave
-        )
-        text_encoder_2 = None
-        if args.text_encoder_2 is not None:
-            text_encoder_2 = TextEncoder(
-                text_encoder_type=args.text_encoder_2,
-                max_length=args.text_len_2,
-                text_encoder_precision=args.text_encoder_precision_2,
-                tokenizer_type=args.tokenizer_2,
-                reproduce=args.reproduce,
+    
+            if args.use_fp8:
+                convert_fp8_linear(model, args.dit_weight, original_dtype=PRECISION_TO_TYPE[args.precision])
+            model = model.to(device)
+            model = Inference.load_state_dict(args, model, pretrained_model_path)
+            model.eval()
+    
+            # VAE
+            vae, _, s_ratio, t_ratio = load_vae(
+                args.vae,
+                args.vae_precision,
                 logger=logger,
                 device=device if not args.use_cpu_offload else "cpu",
             )
-
+            vae_kwargs = {"s_ratio": s_ratio, "t_ratio": t_ratio}
+    
+            # Text encoder
+            if args.i2v_mode:
+                args.text_encoder = "llm-i2v"
+                args.tokenizer = "llm-i2v"
+                args.prompt_template = "dit-llm-encode-i2v"
+                args.prompt_template_video = "dit-llm-encode-video-i2v"
+    
+            if args.prompt_template_video is not None:
+                crop_start = PROMPT_TEMPLATE[args.prompt_template_video].get("crop_start", 0)
+            elif args.prompt_template is not None:
+                crop_start = PROMPT_TEMPLATE[args.prompt_template].get("crop_start", 0)
+            else:
+                crop_start = 0
+            max_length = args.text_len + crop_start
+    
+            prompt_template = PROMPT_TEMPLATE[args.prompt_template] if args.prompt_template is not None else None
+            prompt_template_video = PROMPT_TEMPLATE[args.prompt_template_video] if args.prompt_template_video is not None else None
+    
+            text_encoder = TextEncoder(
+                text_encoder_type=args.text_encoder,
+                max_length=max_length,
+                text_encoder_precision=args.text_encoder_precision,
+                tokenizer_type=args.tokenizer,
+                i2v_mode=args.i2v_mode,
+                prompt_template=prompt_template,
+                prompt_template_video=prompt_template_video,
+                hidden_state_skip_layer=args.hidden_state_skip_layer,
+                apply_final_norm=args.apply_final_norm,
+                reproduce=args.reproduce,
+                logger=logger,
+                device=device if not args.use_cpu_offload else "cpu",
+                image_embed_interleave=image_embed_interleave
+            )
+            text_encoder_2 = None
+            if args.text_encoder_2 is not None:
+                text_encoder_2 = TextEncoder(
+                    text_encoder_type=args.text_encoder_2,
+                    max_length=args.text_len_2,
+                    text_encoder_precision=args.text_encoder_precision_2,
+                    tokenizer_type=args.tokenizer_2,
+                    reproduce=args.reproduce,
+                    logger=logger,
+                    device=device if not args.use_cpu_offload else "cpu",
+                )
+        else:
+            # 20250316 pftq: Initialize as None on non-zero ranks
+            model = None
+            vae = None
+            vae_kwargs = None
+            text_encoder = None
+            text_encoder_2 = None
+    
+        # 20250316 pftq: Broadcast models to all ranks
+        if world_size > 1:
+            logger.info(f"Rank {rank}: Starting broadcast synchronization")
+            dist.barrier()  # Ensure rank 0 finishes loading before broadcasting
+            if rank != 0:
+                # Reconstruct model skeleton on non-zero ranks
+                factor_kwargs = {"device": device, "dtype": PRECISION_TO_TYPE[args.precision]}
+                if args.i2v_mode and args.i2v_condition_type == "latent_concat":
+                    in_channels = args.latent_channels * 2 + 1
+                    image_embed_interleave = 2
+                elif args.i2v_mode and args.i2v_condition_type == "token_replace":
+                    in_channels = args.latent_channels
+                    image_embed_interleave = 4
+                else:
+                    in_channels = args.latent_channels
+                    image_embed_interleave = 1
+                out_channels = args.latent_channels
+                if args.embedded_cfg_scale:
+                    factor_kwargs["guidance_embed"] = True
+                model = load_model(args, in_channels=in_channels, out_channels=out_channels, factor_kwargs=factor_kwargs).to(device)
+                vae, _, s_ratio, t_ratio = load_vae(args.vae, args.vae_precision, logger=logger, device=device if not args.use_cpu_offload else "cpu")
+                vae_kwargs = {"s_ratio": s_ratio, "t_ratio": t_ratio}
+                vae = vae.to(device)
+                if args.i2v_mode:
+                    args.text_encoder = "llm-i2v"
+                    args.tokenizer = "llm-i2v"
+                    args.prompt_template = "dit-llm-encode-i2v"
+                    args.prompt_template_video = "dit-llm-encode-video-i2v"
+                if args.prompt_template_video is not None:
+                    crop_start = PROMPT_TEMPLATE[args.prompt_template_video].get("crop_start", 0)
+                elif args.prompt_template is not None:
+                    crop_start = PROMPT_TEMPLATE[args.prompt_template].get("crop_start", 0)
+                else:
+                    crop_start = 0
+                max_length = args.text_len + crop_start
+                prompt_template = PROMPT_TEMPLATE[args.prompt_template] if args.prompt_template is not None else None
+                prompt_template_video = PROMPT_TEMPLATE[args.prompt_template_video] if args.prompt_template_video is not None else None
+                text_encoder = TextEncoder(
+                    text_encoder_type=args.text_encoder,
+                    max_length=max_length,
+                    text_encoder_precision=args.text_encoder_precision,
+                    tokenizer_type=args.tokenizer,
+                    i2v_mode=args.i2v_mode,
+                    prompt_template=prompt_template,
+                    prompt_template_video=prompt_template_video,
+                    hidden_state_skip_layer=args.hidden_state_skip_layer,
+                    apply_final_norm=args.apply_final_norm,
+                    reproduce=args.reproduce,
+                    logger=logger,
+                    device=device if not args.use_cpu_offload else "cpu",
+                    image_embed_interleave=image_embed_interleave
+                ).to(device)
+                text_encoder_2 = None
+                if args.text_encoder_2 is not None:
+                    text_encoder_2 = TextEncoder(
+                        text_encoder_type=args.text_encoder_2,
+                        max_length=args.text_len_2,
+                        text_encoder_precision=args.text_encoder_precision_2,
+                        tokenizer_type=args.tokenizer_2,
+                        reproduce=args.reproduce,
+                        logger=logger,
+                        device=device if not args.use_cpu_offload else "cpu",
+                    ).to(device)
+    
+            # Broadcast model parameters with logging
+            logger.info(f"Rank {rank}: Broadcasting model parameters")
+            for param in model.parameters():
+                dist.broadcast(param.data, src=0)
+            model.eval()
+            logger.info(f"Rank {rank}: Broadcasting VAE parameters")
+            for param in vae.parameters():
+                dist.broadcast(param.data, src=0)
+            # 20250316 pftq: Use broadcast_object_list for vae_kwargs
+            logger.info(f"Rank {rank}: Broadcasting vae_kwargs")
+            vae_kwargs_list = [vae_kwargs] if rank == 0 else [None]
+            dist.broadcast_object_list(vae_kwargs_list, src=0)
+            vae_kwargs = vae_kwargs_list[0]
+            logger.info(f"Rank {rank}: Broadcasting text_encoder parameters")
+            for param in text_encoder.parameters():
+                dist.broadcast(param.data, src=0)
+            if text_encoder_2 is not None:
+                logger.info(f"Rank {rank}: Broadcasting text_encoder_2 parameters")
+                for param in text_encoder_2.parameters():
+                    dist.broadcast(param.data, src=0)
+    
         return cls(
             args=args,
             vae=vae,
