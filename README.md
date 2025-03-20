@@ -84,7 +84,7 @@ If you develop/use HunyuanVideo-I2V in your projects, welcome to let us know.
 
 - ComfyUI-Kijai (FP8 Inference, V2V and IP2V Generation): [ComfyUI-HunyuanVideoWrapper](https://github.com/kijai/ComfyUI-HunyuanVideoWrapper) by [Kijai](https://github.com/kijai)
 - HunyuanVideoGP (GPU Poor version): [HunyuanVideoGP](https://github.com/deepbeepmeep/HunyuanVideoGP) by [DeepBeepMeep](https://github.com/deepbeepmeep)
-
+- xDiT compatibility improvement: [xDiT compatibility improvement](https://github.com/Tencent/HunyuanVideo-I2V/issues/36#issuecomment-2728068507) by [pftq](https://github.com/pftq)
 
 ## 📑 Open-source Plan
 - HunyuanVideo-I2V (Image-to-Video Model)
