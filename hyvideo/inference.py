@@ -42,6 +42,71 @@ except:
     init_distributed_environment = None
 
 
+###############################################
+# 20250308 pftq: Riflex workaround to fix 192-frame-limit bug, credit to Kijai for finding it in ComfyUI and thu-ml for making it
+# https://github.com/thu-ml/RIFLEx/blob/main/riflex_utils.py
+from diffusers.models.embeddings import get_1d_rotary_pos_embed
+import numpy as np
+from typing import Union,Optional
+def get_1d_rotary_pos_embed_riflex(
+    dim: int,
+    pos: Union[np.ndarray, int],
+    theta: float = 10000.0,
+    use_real=False,
+    k: Optional[int] = None,
+    L_test: Optional[int] = None,
+):
+    """
+    RIFLEx: Precompute the frequency tensor for complex exponentials (cis) with given dimensions.
+
+    This function calculates a frequency tensor with complex exponentials using the given dimension 'dim' and the end
+    index 'end'. The 'theta' parameter scales the frequencies. The returned tensor contains complex values in complex64
+    data type.
+
+    Args:
+        dim (`int`): Dimension of the frequency tensor.
+        pos (`np.ndarray` or `int`): Position indices for the frequency tensor. [S] or scalar
+        theta (`float`, *optional*, defaults to 10000.0):
+            Scaling factor for frequency computation. Defaults to 10000.0.
+        use_real (`bool`, *optional*):
+            If True, return real part and imaginary part separately. Otherwise, return complex numbers.
+        k (`int`, *optional*, defaults to None): the index for the intrinsic frequency in RoPE
+        L_test (`int`, *optional*, defaults to None): the number of frames for inference
+    Returns:
+        `torch.Tensor`: Precomputed frequency tensor with complex exponentials. [S, D/2]
+    """
+    assert dim % 2 == 0
+
+    if isinstance(pos, int):
+        pos = torch.arange(pos)
+    if isinstance(pos, np.ndarray):
+        pos = torch.from_numpy(pos)  # type: ignore  # [S]
+
+    freqs = 1.0 / (
+            theta ** (torch.arange(0, dim, 2, device=pos.device)[: (dim // 2)].float() / dim)
+    )  # [D/2]
+
+    # === Riflex modification start ===
+    # Reduce the intrinsic frequency to stay within a single period after extrapolation (see Eq. (8)).
+    # Empirical observations show that a few videos may exhibit repetition in the tail frames.
+    # To be conservative, we multiply by 0.9 to keep the extrapolated length below 90% of a single period.
+    if k is not None:
+        freqs[k-1] = 0.9 * 2 * torch.pi / L_test
+    # === Riflex modification end ===
+
+    freqs = torch.outer(pos, freqs)  # type: ignore   # [S, D/2]
+    if use_real:
+        freqs_cos = freqs.cos().repeat_interleave(2, dim=1).float()  # [S, D]
+        freqs_sin = freqs.sin().repeat_interleave(2, dim=1).float()  # [S, D]
+        return freqs_cos, freqs_sin
+    else:
+        # lumina
+        freqs_cis = torch.polar(torch.ones_like(freqs), freqs)  # complex64     # [S, D/2]
+        return freqs_cis
+
+
+###############################################
+
 def parallelize_transformer(pipe):
     transformer = pipe.transformer
     original_forward = transformer.forward
@@ -107,7 +172,6 @@ def parallelize_transformer(pipe):
 
     new_forward = new_forward.__get__(transformer)
     transformer.forward = new_forward
-    
 
 class Inference(object):
     def __init__(
@@ -126,14 +190,11 @@ class Inference(object):
     ):
         self.vae = vae
         self.vae_kwargs = vae_kwargs
-
         self.text_encoder = text_encoder
         self.text_encoder_2 = text_encoder_2
-
         self.model = model
         self.pipeline = pipeline
         self.use_cpu_offload = use_cpu_offload
-
         self.args = args
         self.device = (
             device
@@ -145,149 +206,230 @@ class Inference(object):
         self.logger = logger
         self.parallel_args = parallel_args
 
+    # 20250316 pftq: Fixed multi-GPU loading times going up to 20 min due to loading contention by loading models only to one GPU and braodcasting to the rest.
     @classmethod
     def from_pretrained(cls, pretrained_model_path, args, device=None, **kwargs):
         """
         Initialize the Inference pipeline.
-
+    
         Args:
             pretrained_model_path (str or pathlib.Path): The model path, including t2v, text encoder and vae checkpoints.
             args (argparse.Namespace): The arguments for the pipeline.
-            device (int): The device for inference. Default is 0.
+            device (int): The device for inference. Default is None.
         """
-        # ========================================================================
         logger.info(f"Got text-to-video model root path: {pretrained_model_path}")
         
-        # ==================== Initialize Distributed Environment ================
+        # ========================================================================
+        # Initialize Distributed Environment
+        # ========================================================================
+        # 20250316 pftq: Modified to extract rank and world_size early for sequential loading
         if args.ulysses_degree > 1 or args.ring_degree > 1:
-            assert xfuser is not None, \
-                "Ulysses Attention and Ring Attention requires xfuser package."
-
-            assert args.use_cpu_offload is False, \
-                "Cannot enable use_cpu_offload in the distributed environment."
-
-            dist.init_process_group("nccl")
-
-            assert dist.get_world_size() == args.ring_degree * args.ulysses_degree, \
+            assert xfuser is not None, "Ulysses Attention and Ring Attention requires xfuser package."
+            assert args.use_cpu_offload is False, "Cannot enable use_cpu_offload in the distributed environment."
+            # 20250316 pftq: Set local rank and device explicitly for NCCL
+            local_rank = int(os.environ['LOCAL_RANK'])
+            device = torch.device(f"cuda:{local_rank}")
+            torch.cuda.set_device(local_rank)  # 20250316 pftq: Set CUDA device explicitly
+            dist.init_process_group("nccl")  # 20250316 pftq: Removed device_id, rely on set_device
+            rank = dist.get_rank()
+            world_size = dist.get_world_size()
+            assert world_size == args.ring_degree * args.ulysses_degree, \
                 "number of GPUs should be equal to ring_degree * ulysses_degree."
-
-            init_distributed_environment(rank=dist.get_rank(), world_size=dist.get_world_size())
-            
+            init_distributed_environment(rank=rank, world_size=world_size)
             initialize_model_parallel(
-                sequence_parallel_degree=dist.get_world_size(),
+                sequence_parallel_degree=world_size,
                 ring_degree=args.ring_degree,
                 ulysses_degree=args.ulysses_degree,
             )
-            device = torch.device(f"cuda:{os.environ['LOCAL_RANK']}")
         else:
+            rank = 0  # 20250316 pftq: Default rank for single GPU
+            world_size = 1  # 20250316 pftq: Default world_size for single GPU
             if device is None:
                 device = "cuda" if torch.cuda.is_available() else "cpu"
-
+    
         parallel_args = {"ulysses_degree": args.ulysses_degree, "ring_degree": args.ring_degree}
-
-        # ======================== Get the args path =============================
-
-        # Disable gradient
         torch.set_grad_enabled(False)
-
-        # =========================== Build main model ===========================
-        logger.info("Building model...")
-        factor_kwargs = {"device": device, "dtype": PRECISION_TO_TYPE[args.precision]}
-        if args.i2v_mode and args.i2v_condition_type == "latent_concat":
-            in_channels = args.latent_channels * 2 + 1
-            image_embed_interleave = 2
-        elif args.i2v_mode and args.i2v_condition_type == "token_replace":
-            in_channels = args.latent_channels
-            image_embed_interleave = 4
-        else:
-            in_channels = args.latent_channels
-            image_embed_interleave = 1
-        out_channels = args.latent_channels
-
-        if args.embedded_cfg_scale:
-            factor_kwargs["guidance_embed"] = True
-
-        model = load_model(
-            args,
-            in_channels=in_channels,
-            out_channels=out_channels,
-            factor_kwargs=factor_kwargs,
-        )
-
-        if args.use_fp8:
-            convert_fp8_linear(model, args.dit_weight, original_dtype=PRECISION_TO_TYPE[args.precision])
-        model = model.to(device)
-        model = Inference.load_state_dict(args, model, pretrained_model_path)
-        model.eval()
-
-        # ============================= Build extra models ========================
-        # VAE
-        vae, _, s_ratio, t_ratio = load_vae(
-            args.vae,
-            args.vae_precision,
-            logger=logger,
-            device=device if not args.use_cpu_offload else "cpu",
-        )
-        vae_kwargs = {"s_ratio": s_ratio, "t_ratio": t_ratio}
-
-        # Text encoder
-        if args.i2v_mode:
-            args.text_encoder = "llm-i2v"
-            args.tokenizer = "llm-i2v"
-            args.prompt_template = "dit-llm-encode-i2v"
-            args.prompt_template_video = "dit-llm-encode-video-i2v"
-
-        if args.prompt_template_video is not None:
-            crop_start = PROMPT_TEMPLATE[args.prompt_template_video].get(
-                "crop_start", 0
+    
+        # ========================================================================
+        # Build main model, VAE, and text encoder sequentially on rank 0
+        # ========================================================================
+        # 20250316 pftq: Load models only on rank 0, then broadcast
+        if rank == 0:
+            logger.info("Building model...")
+            factor_kwargs = {"device": device, "dtype": PRECISION_TO_TYPE[args.precision]}
+            if args.i2v_mode and args.i2v_condition_type == "latent_concat":
+                in_channels = args.latent_channels * 2 + 1
+                image_embed_interleave = 2
+            elif args.i2v_mode and args.i2v_condition_type == "token_replace":
+                in_channels = args.latent_channels
+                image_embed_interleave = 4
+            else:
+                in_channels = args.latent_channels
+                image_embed_interleave = 1
+            out_channels = args.latent_channels
+    
+            if args.embedded_cfg_scale:
+                factor_kwargs["guidance_embed"] = True
+    
+            model = load_model(
+                args,
+                in_channels=in_channels,
+                out_channels=out_channels,
+                factor_kwargs=factor_kwargs,
             )
-        elif args.prompt_template is not None:
-            crop_start = PROMPT_TEMPLATE[args.prompt_template].get("crop_start", 0)
-        else:
-            crop_start = 0
-        max_length = args.text_len + crop_start
-
-        # prompt_template
-        prompt_template = (
-            PROMPT_TEMPLATE[args.prompt_template]
-            if args.prompt_template is not None
-            else None
-        )
-
-        # prompt_template_video
-        prompt_template_video = (
-            PROMPT_TEMPLATE[args.prompt_template_video]
-            if args.prompt_template_video is not None
-            else None
-        )
-
-        text_encoder = TextEncoder(
-            text_encoder_type=args.text_encoder,
-            max_length=max_length,
-            text_encoder_precision=args.text_encoder_precision,
-            tokenizer_type=args.tokenizer,
-            i2v_mode=args.i2v_mode,
-            prompt_template=prompt_template,
-            prompt_template_video=prompt_template_video,
-            hidden_state_skip_layer=args.hidden_state_skip_layer,
-            apply_final_norm=args.apply_final_norm,
-            reproduce=args.reproduce,
-            logger=logger,
-            device=device if not args.use_cpu_offload else "cpu",
-            image_embed_interleave=image_embed_interleave
-        )
-        text_encoder_2 = None
-        if args.text_encoder_2 is not None:
-            text_encoder_2 = TextEncoder(
-                text_encoder_type=args.text_encoder_2,
-                max_length=args.text_len_2,
-                text_encoder_precision=args.text_encoder_precision_2,
-                tokenizer_type=args.tokenizer_2,
-                reproduce=args.reproduce,
+    
+            if args.use_fp8:
+                convert_fp8_linear(model, args.dit_weight, original_dtype=PRECISION_TO_TYPE[args.precision])
+            model = model.to(device)
+            model = Inference.load_state_dict(args, model, pretrained_model_path)
+            model.eval()
+    
+            # VAE
+            vae, _, s_ratio, t_ratio = load_vae(
+                args.vae,
+                args.vae_precision,
                 logger=logger,
                 device=device if not args.use_cpu_offload else "cpu",
             )
-
+            vae_kwargs = {"s_ratio": s_ratio, "t_ratio": t_ratio}
+    
+            # Text encoder
+            if args.i2v_mode:
+                args.text_encoder = "llm-i2v"
+                args.tokenizer = "llm-i2v"
+                args.prompt_template = "dit-llm-encode-i2v"
+                args.prompt_template_video = "dit-llm-encode-video-i2v"
+    
+            if args.prompt_template_video is not None:
+                crop_start = PROMPT_TEMPLATE[args.prompt_template_video].get("crop_start", 0)
+            elif args.prompt_template is not None:
+                crop_start = PROMPT_TEMPLATE[args.prompt_template].get("crop_start", 0)
+            else:
+                crop_start = 0
+            max_length = args.text_len + crop_start
+    
+            prompt_template = PROMPT_TEMPLATE[args.prompt_template] if args.prompt_template is not None else None
+            prompt_template_video = PROMPT_TEMPLATE[args.prompt_template_video] if args.prompt_template_video is not None else None
+    
+            text_encoder = TextEncoder(
+                text_encoder_type=args.text_encoder,
+                max_length=max_length,
+                text_encoder_precision=args.text_encoder_precision,
+                tokenizer_type=args.tokenizer,
+                i2v_mode=args.i2v_mode,
+                prompt_template=prompt_template,
+                prompt_template_video=prompt_template_video,
+                hidden_state_skip_layer=args.hidden_state_skip_layer,
+                apply_final_norm=args.apply_final_norm,
+                reproduce=args.reproduce,
+                logger=logger,
+                device=device if not args.use_cpu_offload else "cpu",
+                image_embed_interleave=image_embed_interleave
+            )
+            text_encoder_2 = None
+            if args.text_encoder_2 is not None:
+                text_encoder_2 = TextEncoder(
+                    text_encoder_type=args.text_encoder_2,
+                    max_length=args.text_len_2,
+                    text_encoder_precision=args.text_encoder_precision_2,
+                    tokenizer_type=args.tokenizer_2,
+                    reproduce=args.reproduce,
+                    logger=logger,
+                    device=device if not args.use_cpu_offload else "cpu",
+                )
+        else:
+            # 20250316 pftq: Initialize as None on non-zero ranks
+            model = None
+            vae = None
+            vae_kwargs = None
+            text_encoder = None
+            text_encoder_2 = None
+    
+        # 20250316 pftq: Broadcast models to all ranks
+        if world_size > 1:
+            logger.info(f"Rank {rank}: Starting broadcast synchronization")
+            dist.barrier()  # Ensure rank 0 finishes loading before broadcasting
+            if rank != 0:
+                # Reconstruct model skeleton on non-zero ranks
+                factor_kwargs = {"device": device, "dtype": PRECISION_TO_TYPE[args.precision]}
+                if args.i2v_mode and args.i2v_condition_type == "latent_concat":
+                    in_channels = args.latent_channels * 2 + 1
+                    image_embed_interleave = 2
+                elif args.i2v_mode and args.i2v_condition_type == "token_replace":
+                    in_channels = args.latent_channels
+                    image_embed_interleave = 4
+                else:
+                    in_channels = args.latent_channels
+                    image_embed_interleave = 1
+                out_channels = args.latent_channels
+                if args.embedded_cfg_scale:
+                    factor_kwargs["guidance_embed"] = True
+                model = load_model(args, in_channels=in_channels, out_channels=out_channels, factor_kwargs=factor_kwargs).to(device)
+                vae, _, s_ratio, t_ratio = load_vae(args.vae, args.vae_precision, logger=logger, device=device if not args.use_cpu_offload else "cpu")
+                vae_kwargs = {"s_ratio": s_ratio, "t_ratio": t_ratio}
+                vae = vae.to(device)
+                if args.i2v_mode:
+                    args.text_encoder = "llm-i2v"
+                    args.tokenizer = "llm-i2v"
+                    args.prompt_template = "dit-llm-encode-i2v"
+                    args.prompt_template_video = "dit-llm-encode-video-i2v"
+                if args.prompt_template_video is not None:
+                    crop_start = PROMPT_TEMPLATE[args.prompt_template_video].get("crop_start", 0)
+                elif args.prompt_template is not None:
+                    crop_start = PROMPT_TEMPLATE[args.prompt_template].get("crop_start", 0)
+                else:
+                    crop_start = 0
+                max_length = args.text_len + crop_start
+                prompt_template = PROMPT_TEMPLATE[args.prompt_template] if args.prompt_template is not None else None
+                prompt_template_video = PROMPT_TEMPLATE[args.prompt_template_video] if args.prompt_template_video is not None else None
+                text_encoder = TextEncoder(
+                    text_encoder_type=args.text_encoder,
+                    max_length=max_length,
+                    text_encoder_precision=args.text_encoder_precision,
+                    tokenizer_type=args.tokenizer,
+                    i2v_mode=args.i2v_mode,
+                    prompt_template=prompt_template,
+                    prompt_template_video=prompt_template_video,
+                    hidden_state_skip_layer=args.hidden_state_skip_layer,
+                    apply_final_norm=args.apply_final_norm,
+                    reproduce=args.reproduce,
+                    logger=logger,
+                    device=device if not args.use_cpu_offload else "cpu",
+                    image_embed_interleave=image_embed_interleave
+                ).to(device)
+                text_encoder_2 = None
+                if args.text_encoder_2 is not None:
+                    text_encoder_2 = TextEncoder(
+                        text_encoder_type=args.text_encoder_2,
+                        max_length=args.text_len_2,
+                        text_encoder_precision=args.text_encoder_precision_2,
+                        tokenizer_type=args.tokenizer_2,
+                        reproduce=args.reproduce,
+                        logger=logger,
+                        device=device if not args.use_cpu_offload else "cpu",
+                    ).to(device)
+    
+            # Broadcast model parameters with logging
+            logger.info(f"Rank {rank}: Broadcasting model parameters")
+            for param in model.parameters():
+                dist.broadcast(param.data, src=0)
+            model.eval()
+            logger.info(f"Rank {rank}: Broadcasting VAE parameters")
+            for param in vae.parameters():
+                dist.broadcast(param.data, src=0)
+            # 20250316 pftq: Use broadcast_object_list for vae_kwargs
+            logger.info(f"Rank {rank}: Broadcasting vae_kwargs")
+            vae_kwargs_list = [vae_kwargs] if rank == 0 else [None]
+            dist.broadcast_object_list(vae_kwargs_list, src=0)
+            vae_kwargs = vae_kwargs_list[0]
+            logger.info(f"Rank {rank}: Broadcasting text_encoder parameters")
+            for param in text_encoder.parameters():
+                dist.broadcast(param.data, src=0)
+            if text_encoder_2 is not None:
+                logger.info(f"Rank {rank}: Broadcasting text_encoder_2 parameters")
+                for param in text_encoder_2.parameters():
+                    dist.broadcast(param.data, src=0)
+    
         return cls(
             args=args,
             vae=vae,
@@ -300,7 +442,7 @@ class Inference(object):
             logger=logger,
             parallel_args=parallel_args
         )
-
+        
     @staticmethod
     def load_state_dict(args, model, pretrained_model_path):
         load_key = args.load_key
@@ -321,18 +463,10 @@ class Inference(object):
                 files = [f for f in files if str(f).endswith("_model_states.pt")]
                 model_path = files[0]
                 if len(files) > 1:
-                    logger.warning(
-                        f"Multiple model weights found in {dit_weight}, using {model_path}"
-                    )
+                    logger.warning(f"Multiple model weights found in {dit_weight}, using {model_path}")
                 bare_model = False
             else:
-                raise ValueError(
-                    f"Invalid model path: {dit_weight} with unrecognized weight format: "
-                    f"{list(map(str, files))}. When given a directory as --dit-weight, only "
-                    f"`pytorch_model_*.pt`(provided by HunyuanDiT official) and "
-                    f"`*_model_states.pt`(saved by deepspeed) can be parsed. If you want to load a "
-                    f"specific weight file, please provide the full path to the file."
-                )
+                raise ValueError(f"Invalid model path: {dit_weight} with unrecognized weight format")
         else:
             if dit_weight.is_dir():
                 files = list(dit_weight.glob("*.pt"))
@@ -345,18 +479,10 @@ class Inference(object):
                     files = [f for f in files if str(f).endswith("_model_states.pt")]
                     model_path = files[0]
                     if len(files) > 1:
-                        logger.warning(
-                            f"Multiple model weights found in {dit_weight}, using {model_path}"
-                        )
+                        logger.warning(f"Multiple model weights found in {dit_weight}, using {model_path}")
                     bare_model = False
                 else:
-                    raise ValueError(
-                        f"Invalid model path: {dit_weight} with unrecognized weight format: "
-                        f"{list(map(str, files))}. When given a directory as --dit-weight, only "
-                        f"`pytorch_model_*.pt`(provided by HunyuanDiT official) and "
-                        f"`*_model_states.pt`(saved by deepspeed) can be parsed. If you want to load a "
-                        f"specific weight file, please provide the full path to the file."
-                    )
+                    raise ValueError(f"Invalid model path: {dit_weight} with unrecognized weight format")
             elif dit_weight.is_file():
                 model_path = dit_weight
                 bare_model = "unknown"
@@ -374,10 +500,7 @@ class Inference(object):
             if load_key in state_dict:
                 state_dict = state_dict[load_key]
             else:
-                raise KeyError(
-                    f"Missing key: `{load_key}` in the checkpoint: {model_path}. The keys in the checkpoint "
-                    f"are: {list(state_dict.keys())}."
-                )
+                raise KeyError(f"Missing key: `{load_key}` in the checkpoint: {model_path}")
         model.load_state_dict(state_dict, strict=True)
         return model
 
@@ -392,7 +515,6 @@ class Inference(object):
         if len(size) != 2:
             raise ValueError(f"Size must be an integer or (height, width), got {size}.")
         return size
-
 
 class HunyuanVideoSampler(Inference):
     def __init__(
@@ -456,7 +578,6 @@ class HunyuanVideoSampler(Inference):
         device=None,
         progress_bar_config=None,
     ):
-        """Load the denoising scheduler for inference."""
         if scheduler is None:
             if args.denoise_type == "flow":
                 scheduler = FlowMatchDiscreteScheduler(
@@ -483,17 +604,20 @@ class HunyuanVideoSampler(Inference):
 
         return pipeline
 
+    # 20250317 pftq: Modified to use Riflex when >192 frames
     def get_rotary_pos_embed(self, video_length, height, width):
         target_ndim = 3
-        ndim = 5 - 2
-        # 884
+        ndim = 5 - 2  # B, C, F, H, W -> F, H, W
+    
+        # Compute latent sizes based on VAE type
         if "884" in self.args.vae:
             latents_size = [(video_length - 1) // 4 + 1, height // 8, width // 8]
         elif "888" in self.args.vae:
             latents_size = [(video_length - 1) // 8 + 1, height // 8, width // 8]
         else:
             latents_size = [video_length, height // 8, width // 8]
-
+    
+        # Compute rope sizes
         if isinstance(self.model.patch_size, int):
             assert all(s % self.model.patch_size == 0 for s in latents_size), (
                 f"Latent size(last {ndim} dimensions) should be divisible by patch size({self.model.patch_size}), "
@@ -508,26 +632,70 @@ class HunyuanVideoSampler(Inference):
                 f"Latent size(last {ndim} dimensions) should be divisible by patch size({self.model.patch_size}), "
                 f"but got {latents_size}."
             )
-            rope_sizes = [
-                s // self.model.patch_size[idx] for idx, s in enumerate(latents_size)
-            ]
-
+            rope_sizes = [s // self.model.patch_size[idx] for idx, s in enumerate(latents_size)]
+    
         if len(rope_sizes) != target_ndim:
-            rope_sizes = [1] * (target_ndim - len(rope_sizes)) + rope_sizes  # time axis
+            rope_sizes = [1] * (target_ndim - len(rope_sizes)) + rope_sizes  # Pad time axis
+    
+        # 20250316 pftq: Add RIFLEx logic for > 192 frames
+        L_test = rope_sizes[0]  # Latent frames
+        L_train = 25  # Training length from HunyuanVideo
+        actual_num_frames = video_length  # Use input video_length directly
+    
         head_dim = self.model.hidden_size // self.model.heads_num
-        rope_dim_list = self.model.rope_dim_list
-        if rope_dim_list is None:
-            rope_dim_list = [head_dim // target_ndim for _ in range(target_ndim)]
-        assert (
-            sum(rope_dim_list) == head_dim
-        ), "sum(rope_dim_list) should equal to head_dim of attention layer"
-        freqs_cos, freqs_sin = get_nd_rotary_pos_embed(
-            rope_dim_list,
-            rope_sizes,
-            theta=self.args.rope_theta,
-            use_real=True,
-            theta_rescale_factor=1,
-        )
+        rope_dim_list = self.model.rope_dim_list or [head_dim // target_ndim for _ in range(target_ndim)]
+        assert sum(rope_dim_list) == head_dim, "sum(rope_dim_list) must equal head_dim"
+    
+        if actual_num_frames > 192:
+            k = 2+((actual_num_frames + 3) // (4 * L_train))
+            k = max(4, min(8, k))
+            logger.debug(f"actual_num_frames = {actual_num_frames} > 192, RIFLEx applied with k = {k}")
+    
+            # Compute positional grids for RIFLEx
+            axes_grids = [torch.arange(size, device=self.device, dtype=torch.float32) for size in rope_sizes]
+            grid = torch.meshgrid(*axes_grids, indexing="ij")
+            grid = torch.stack(grid, dim=0)  # [3, t, h, w]
+            pos = grid.reshape(3, -1).t()  # [t * h * w, 3]
+    
+            # Apply RIFLEx to temporal dimension
+            freqs = []
+            for i in range(3):
+                if i == 0:  # Temporal with RIFLEx
+                    freqs_cos, freqs_sin = get_1d_rotary_pos_embed_riflex(
+                        rope_dim_list[i],
+                        pos[:, i],
+                        theta=self.args.rope_theta,
+                        use_real=True,
+                        k=k,
+                        L_test=L_test
+                    )
+                else:  # Spatial with default RoPE
+                    freqs_cos, freqs_sin = get_1d_rotary_pos_embed_riflex(
+                        rope_dim_list[i],
+                        pos[:, i],
+                        theta=self.args.rope_theta,
+                        use_real=True,
+                        k=None,
+                        L_test=None
+                    )
+                freqs.append((freqs_cos, freqs_sin))
+                logger.debug(f"freq[{i}] shape: {freqs_cos.shape}, device: {freqs_cos.device}")
+    
+            freqs_cos = torch.cat([f[0] for f in freqs], dim=1)
+            freqs_sin = torch.cat([f[1] for f in freqs], dim=1)
+            logger.debug(f"freqs_cos shape: {freqs_cos.shape}, device: {freqs_cos.device}")
+        else:
+            # 20250316 pftq: Original code for <= 192 frames
+            logger.debug(f"actual_num_frames = {actual_num_frames} <= 192, using original RoPE")
+            freqs_cos, freqs_sin = get_nd_rotary_pos_embed(
+                rope_dim_list,
+                rope_sizes,
+                theta=self.args.rope_theta,
+                use_real=True,
+                theta_rescale_factor=1,
+            )
+            logger.debug(f"freqs_cos shape: {freqs_cos.shape}, device: {freqs_cos.device}")
+    
         return freqs_cos, freqs_sin
 
     @torch.no_grad()
@@ -555,35 +723,8 @@ class HunyuanVideoSampler(Inference):
         xdit_adaptive_size=True,
         **kwargs,
     ):
-        """
-        Predict the image/video from the given text.
-
-        Args:
-            prompt (str or List[str]): The input text.
-            kwargs:
-                height (int): The height of the output video. Default is 192.
-                width (int): The width of the output video. Default is 336.
-                video_length (int): The frame number of the output video. Default is 129.
-                seed (int or List[str]): The random seed for the generation. Default is a random integer.
-                negative_prompt (str or List[str]): The negative text prompt. Default is an empty string.
-                infer_steps (int): The number of inference steps. Default is 50.
-                guidance_scale (float): The guidance scale for the generation. Default is 6.0.
-                flow_shift (float): The flow shift for the generation. Default is 5.0.
-                embedded_guidance_scale (float): embedded guidance scale for the generation. Default is None.
-                batch_size (int): batch size for inference. Default is 1.
-                num_images_per_prompt (int): The number of images per prompt. Default is 1.
-                i2v_mode (bool): Whether to open i2v mode. Default is False.
-                i2v_resolution (str): Resolution for i2v inference. Default is 720p.
-                i2v_image_path (str): Image path for i2v inference. Default is None.
-                ulysses_degree (int): Ulysses degree for xdit parallel args. Default is 1.
-                ring_degree (int): ring degree for xdit parallel args. Default is 1.
-                xdit_adaptive_size (bool): Make the generated video has no black padding. Default is True.
-        """
         out_dict = dict()
 
-        # ========================================================================
-        # Arguments: seed
-        # ========================================================================
         if isinstance(seed, torch.Tensor):
             seed = seed.tolist()
         if seed is None:
@@ -618,9 +759,6 @@ class HunyuanVideoSampler(Inference):
         generator = [torch.Generator(self.device).manual_seed(seed) for seed in seeds]
         out_dict["seeds"] = seeds
 
-        # ========================================================================
-        # Arguments: target_width, target_height, target_video_length
-        # ========================================================================
         if width <= 0 or height <= 0 or video_length <= 0:
             raise ValueError(
                 f"`height` and `width` and `video_length` must be positive integers, got height={height}, width={width}, video_length={video_length}"
@@ -640,14 +778,10 @@ class HunyuanVideoSampler(Inference):
 
         out_dict["size"] = (target_height, target_width, target_video_length)
 
-        # ========================================================================
-        # Arguments: prompt, new_prompt, negative_prompt
-        # ========================================================================
         if not isinstance(prompt, str):
             raise TypeError(f"`prompt` must be a string, but got {type(prompt)}")
         prompt = [prompt.strip()]
 
-        # negative prompt
         if negative_prompt is None or negative_prompt == "":
             negative_prompt = self.default_negative_prompt
         if guidance_scale == 1.0:
@@ -658,9 +792,6 @@ class HunyuanVideoSampler(Inference):
             )
         negative_prompt = [negative_prompt.strip()]
 
-        # ========================================================================
-        # Scheduler
-        # ========================================================================
         scheduler = FlowMatchDiscreteScheduler(
             shift=flow_shift,
             reverse=self.args.flow_reverse,
@@ -668,18 +799,15 @@ class HunyuanVideoSampler(Inference):
         )
         self.pipeline.scheduler = scheduler
 
-        # ---------------------------------
-        # Reference condition
-        # ---------------------------------
         img_latents = None
         semantic_images = None
         if i2v_mode:
             if i2v_resolution == "720p":
-                bucket_hw_base_size = 960
-            elif i2v_resolution == "540p":
                 bucket_hw_base_size = 720
+            elif i2v_resolution == "540p":
+                bucket_hw_base_size = 540
             elif i2v_resolution == "360p":
-                bucket_hw_base_size = 480
+                bucket_hw_base_size = 360
             else:
                 raise ValueError(f"i2v_resolution: {i2v_resolution} must be in [360p, 540p, 720p]")
 
@@ -695,8 +823,6 @@ class HunyuanVideoSampler(Inference):
                 resize_param = min(closest_size)
                 center_crop_param = closest_size
 
-                # When calculating the scaling ratio, choose the larger ratio (max(scale_w, scale_h)) to ensure that at
-                # least one dimension of the image is greater than or equal to the target size.
                 if xdit_adaptive_size:
                     original_h, original_w = origin_size[1], origin_size[0]
                     target_h, target_w = height, width
@@ -724,22 +850,16 @@ class HunyuanVideoSampler(Inference):
             semantic_image_pixel_values = torch.cat(semantic_image_pixel_values).unsqueeze(0).unsqueeze(2).to(self.device)
 
             with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=True):
-                img_latents = self.pipeline.vae.encode(semantic_image_pixel_values).latent_dist.mode() # B, C, F, H, W
+                img_latents = self.pipeline.vae.encode(semantic_image_pixel_values).latent_dist.mode()
                 img_latents.mul_(self.pipeline.vae.config.scaling_factor)
 
             target_height, target_width = closest_size
 
-        # ========================================================================
-        # Build Rope freqs
-        # ========================================================================
         freqs_cos, freqs_sin = self.get_rotary_pos_embed(
             target_video_length, target_height, target_width
         )
         n_tokens = freqs_cos.shape[0]
 
-        # ========================================================================
-        # Print infer args
-        # ========================================================================
         debug_str = f"""
                         height: {target_height}
                          width: {target_width}
@@ -761,9 +881,6 @@ class HunyuanVideoSampler(Inference):
             xdit_adaptive_size: {xdit_adaptive_size}"""
         logger.debug(debug_str)
 
-        # ========================================================================
-        # Pipeline inference
-        # ========================================================================
         start_time = time.time()
         samples = self.pipeline(
             prompt=prompt,
