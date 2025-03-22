@@ -130,7 +130,6 @@ class VideoDataset(Dataset):
         return video_reader
 
     def preprocess_url(self, data_json_path):
-
         with open(data_json_path, "r") as f:
             data_dict = json.load(f)
 
@@ -146,10 +145,11 @@ class VideoDataset(Dataset):
         data_json_path = self.dataset[idx]
         video_item = self.preprocess_url(data_json_path)
 
+        # 20250322 pftq: fixed to return 5 values for consistency and "not enough values to unpack" error
         # Skip if exists
         latent_save_path = Path(self.latent_cache_dir) / f"{video_item['videoid']}.npy"
         if latent_save_path.exists():
-            return None, None, False
+            return None, None, None, None, False
 
         video_reader = self.request_ceph_data(video_item["video_path"])
 
@@ -173,9 +173,11 @@ class VideoDataset(Dataset):
         start_idx = 0
         batch_index = list(range(start_idx, start_idx + sample_n_frames, stride))
 
+        # 20250322 pftq: fixed to return 5 values for consistency and "not enough values to unpack" error
         if len(batch_index) == 0:
-            print("get video len=0, skip")
-            return None, None, None, False
+            print(f"get video len=0, skip for {video_item['video_path']}")
+            return None, video_item["videoid"], video_item["video_path"], video_item["prompt"], False
+
         # Read frames
         try:
             video_images = video_reader.get_batch(batch_index).asnumpy()
