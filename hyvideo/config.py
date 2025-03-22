@@ -101,7 +101,7 @@ def add_training_args(parser: argparse.ArgumentParser):
     group.add_argument("--final-save", action="store_true", help="Save the final model after training.")
     group.add_argument("--no-final-save", dest="final_save", action="store_false", help="Do not save the final model.")
 
-    group.add_argument("--epochs", type=int, default=100000, help="Number of epochs to train.")
+    group.add_argument("--epochs", type=int, default=100, help="Number of epochs to train.")
     group.add_argument("--max-training-steps", type=int, default=10_000_000, help="Maximum number of training steps.")
     group.add_argument("--ckpt-every", type=int, default=5000, help="Save checkpoint every N steps.")
 
