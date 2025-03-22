@@ -1,5 +1,13 @@
 """
-20250322 pftq: Useful script for stretching your videos to 129 frames in order to not be rejected by the training script.
+20250322 pftq: 
+Useful script for stretching your videos to 129 frames in order to not be rejected by the training script.
+Configure settings below.
+
+Make sure you have ffmpeg and ffmpeg-python installed.
+On Linux, it is:
+apt-get update
+apt-get install -y ffmpeg
+pip install ffmpeg-python
 """
 
 import os
