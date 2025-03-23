@@ -2,7 +2,7 @@
 - Fixed multi-GPU slow model loading due to contention by using sequential loading + broadcasting. See: https://github.com/Tencent/HunyuanVideo-I2V/issues/36
 - Fixed 192-frame limit (8-sec) using Riflex extension method by thu-ml to allow more frames without looping
 - Fixed "not enough values to unpack" error on training / latent extraction.
-- Added bonus "setVideosTo129Frames.py" script for stretching all videos to 129 frames (or whatever you configure, open the .py file).
+- Added bonus "setVideosTo129Frames.py" script for stretching/padding all videos to 129 frames (or whatever you configure, open the .py file) to be usable for training.
 
 Original code/repo: https://github.com/Tencent/HunyuanVideo-I2V
 
