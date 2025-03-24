@@ -1,6 +1,10 @@
 """
 20250322 pftq: 
 Useful script for stretching or padding your videos to 129 frames to meet the training script requirements.
+Searches subfolders recursively, replicates folder structure in output, and copies non-video files.
+Optionally overwrites existing files based on overwriteIfExists setting.
+Post-checks all videos in output directory to confirm they have 129 frames.
+
 Configure settings below.
 
 Make sure you have ffmpeg and ffmpeg-python installed.
@@ -11,18 +15,20 @@ pip install ffmpeg-python
 """
 
 import os
+import shutil
 import subprocess
 import ffmpeg
 from pathlib import Path
 
 # Configuration
 input_dir = "training_original"  # Directory with your original videos
-output_dir = "training"          # Overwrite in same directory (or change to a new one)
+output_dir = "training"          # Output directory (will mirror input_dir structure)
 target_frames = 129              # Desired frame count
 target_fps = 24                  # Output frame rate
 target_duration = target_frames / target_fps  # 5.375 seconds
 target_bitrate = "7M"            # 5 Mbps (5000 kbps)
-stretchFrameRate = True          # True: stretch frame rate; False: pad with repeated frames
+stretchFrameRate = True          # True: stretch by adjusting frame rate; False: pad with repeated frames
+overwriteIfExists = True         # True: overwrite existing files; False: skip if output file exists
 
 def get_video_info(file_path):
     """Get frame count and frame rate of a video using ffprobe."""
@@ -57,7 +63,9 @@ def adjust_video_to_frames(input_path, output_path, current_frames, target_frame
         if stretchFrameRate:
             # Stretch mode: Adjust frame rate to stretch video to target_frames
             original_duration = current_frames / target_fps
-            speed_factor = original_duration / target_duration
+            # Add one frame's worth of duration to target_duration to account for FFmpeg rounding
+            adjusted_target_duration = target_duration + (1 / target_fps)
+            speed_factor = original_duration / adjusted_target_duration
             pts_factor = 1 / speed_factor
 
             stream = stream.filter("setpts", f"{pts_factor}*PTS")  # Adjust speed to stretch
@@ -73,7 +81,9 @@ def adjust_video_to_frames(input_path, output_path, current_frames, target_frame
                 pad_frames = 0
             stream = stream.filter("fps", fps=target_fps)  # Ensure target frame rate (but no stretching)
             if pad_frames > 0:
-                stream = stream.filter("tpad", stop_mode="clone", stop_duration=pad_frames/target_fps)  # Pad by repeating last frame
+                # Add one frame's worth of duration to stop_duration to account for FFmpeg rounding
+                stop_duration = (pad_frames + 1) / target_fps
+                stream = stream.filter("tpad", stop_mode="clone", stop_duration=stop_duration)  # Pad by repeating last frame
             print(f"Padding {input_path} from {current_frames} to {target_frames} frames "
                   f"(padding {pad_frames} frames, bitrate: {target_bitrate}, duration: {target_duration}s)")
 
@@ -94,28 +104,80 @@ def adjust_video_to_frames(input_path, output_path, current_frames, target_frame
     except ffmpeg.Error as e:
         print(f"Error processing {input_path}: {e.stderr.decode()}")
 
-def main():
-    input_path = Path(input_dir)
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
+def check_output_videos(output_path, target_frames, video_extensions):
+    """Check all videos in output_path (recursively) to confirm they have target_frames."""
+    print("\nChecking output videos for correct frame count...")
+    all_correct = True
     
-    video_extensions = (".mp4", ".avi", ".mov", ".mkv")
-    for file in input_path.glob("*"):
-        if file.suffix.lower() in video_extensions:
-            input_file = str(file)
-            output_file = str(output_path / file.name)
-            
-            frame_count, fps = get_video_info(input_file)
+    for file in output_path.rglob("*"):  # Recursively search all subfolders
+        if file.is_file() and file.suffix.lower() in video_extensions:
+            relative_path = file.relative_to(output_path)
+            frame_count, _ = get_video_info(str(file))
             if frame_count is None:
+                print(f"Warning: Could not determine frame count for {relative_path}")
+                all_correct = False
                 continue
             
             if frame_count != target_frames:
-                print(f"Processing {file.name}: {frame_count} frames -> {target_frames} frames")
-                adjust_video_to_frames(input_file, output_file, frame_count, target_frames, target_fps, target_duration, target_bitrate, stretchFrameRate)
+                print(f"Error: {relative_path} has {frame_count} frames, expected {target_frames}")
+                all_correct = False
             else:
-                print(f"{file.name} already has {target_frames} frames, skipping")
+                print(f"Confirmed: {relative_path} has {target_frames} frames")
+    
+    if all_correct:
+        print("All videos have the correct frame count!")
+    else:
+        print("Some videos do not have the correct frame count. Please review the errors above.")
 
-    print("All videos processed!")
+def main():
+    input_path = Path(input_dir)
+    output_path = Path(output_dir)
+    
+    # Define video extensions
+    video_extensions = (".mp4", ".avi", ".mov", ".mkv")
+    
+    # Process videos: recursively search for videos, replicate folder structure
+    print("Processing videos...")
+    for file in input_path.rglob("*"):  # Recursively search all subfolders
+        if file.is_file():  # Ensure it's a file, not a directory
+            relative_path = file.relative_to(input_path)  # Get path relative to input_dir
+            output_file = output_path / relative_path  # Replicate path in output_dir
+            
+            # Check if output file exists and decide whether to skip
+            if output_file.exists() and not overwriteIfExists:
+                print(f"Output file {relative_path} already exists, skipping")
+                continue
+            
+            if file.suffix.lower() in video_extensions:
+                # Video file: process it
+                input_file = str(file)
+                output_file = str(output_file)
+                
+                frame_count, fps = get_video_info(input_file)
+                if frame_count is None:
+                    continue
+                
+                # Create output directory if it doesn't exist
+                output_file_dir = Path(output_file).parent
+                output_file_dir.mkdir(parents=True, exist_ok=True)
+                
+                if frame_count != target_frames:
+                    print(f"Processing {relative_path}: {frame_count} frames -> {target_frames} frames")
+                    adjust_video_to_frames(input_file, output_file, frame_count, target_frames, target_fps, target_duration, target_bitrate, stretchFrameRate)
+                else:
+                    print(f"{relative_path} already has {target_frames} frames, copying to output")
+                    shutil.copy2(input_file, output_file)  # Copy without processing
+            else:
+                # Non-video file: copy to output directory
+                print(f"Copying non-video file: {relative_path}")
+                output_file_dir = Path(output_file).parent
+                output_file_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(file, output_file)
+
+    print("All files processed!")
+    
+    # Post-check: Confirm all videos in output_dir have target_frames
+    check_output_videos(output_path, target_frames, video_extensions)
 
 if __name__ == "__main__":
     try:
