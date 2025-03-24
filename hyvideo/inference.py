@@ -803,11 +803,11 @@ class HunyuanVideoSampler(Inference):
         semantic_images = None
         if i2v_mode:
             if i2v_resolution == "720p":
-                bucket_hw_base_size = 720
+                bucket_hw_base_size = 960
             elif i2v_resolution == "540p":
-                bucket_hw_base_size = 540
+                bucket_hw_base_size = 720
             elif i2v_resolution == "360p":
-                bucket_hw_base_size = 360
+                bucket_hw_base_size = 480
             else:
                 raise ValueError(f"i2v_resolution: {i2v_resolution} must be in [360p, 540p, 720p]")
 
