@@ -604,7 +604,7 @@ class HunyuanVideoSampler(Inference):
 
         return pipeline
 
-    # 20250317 pftq: Modified to use Riflex when >193 frames
+    # 20250317 pftq: Modified to use Riflex when >192 frames
     def get_rotary_pos_embed(self, video_length, height, width):
         target_ndim = 3
         ndim = 5 - 2  # B, C, F, H, W -> F, H, W
@@ -637,7 +637,7 @@ class HunyuanVideoSampler(Inference):
         if len(rope_sizes) != target_ndim:
             rope_sizes = [1] * (target_ndim - len(rope_sizes)) + rope_sizes  # Pad time axis
     
-        # 20250316 pftq: Add RIFLEx logic for > 193 frames
+        # 20250316 pftq: Add RIFLEx logic for > 192 frames
         L_test = rope_sizes[0]  # Latent frames
         L_train = 25  # Training length from HunyuanVideo
         actual_num_frames = video_length  # Use input video_length directly
@@ -646,10 +646,10 @@ class HunyuanVideoSampler(Inference):
         rope_dim_list = self.model.rope_dim_list or [head_dim // target_ndim for _ in range(target_ndim)]
         assert sum(rope_dim_list) == head_dim, "sum(rope_dim_list) must equal head_dim"
     
-        if actual_num_frames > 193:
+        if actual_num_frames > 192:
             k = 2+((actual_num_frames + 3) // (4 * L_train))
             k = max(4, min(8, k))
-            logger.debug(f"actual_num_frames = {actual_num_frames} > 193, RIFLEx applied with k = {k}")
+            logger.debug(f"actual_num_frames = {actual_num_frames} > 192, RIFLEx applied with k = {k}")
     
             # Compute positional grids for RIFLEx
             axes_grids = [torch.arange(size, device=self.device, dtype=torch.float32) for size in rope_sizes]
@@ -685,8 +685,8 @@ class HunyuanVideoSampler(Inference):
             freqs_sin = torch.cat([f[1] for f in freqs], dim=1)
             logger.debug(f"freqs_cos shape: {freqs_cos.shape}, device: {freqs_cos.device}")
         else:
-            # 20250316 pftq: Original code for <= 193 frames
-            logger.debug(f"actual_num_frames = {actual_num_frames} <= 193, using original RoPE")
+            # 20250316 pftq: Original code for <= 192 frames
+            logger.debug(f"actual_num_frames = {actual_num_frames} <= 192, using original RoPE")
             freqs_cos, freqs_sin = get_nd_rotary_pos_embed(
                 rope_dim_list,
                 rope_sizes,
