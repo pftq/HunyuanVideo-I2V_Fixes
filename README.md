@@ -1,3 +1,13 @@
+# **Fixes/improvements to base Hunyuan I2V code**
+ - Fixed multi-GPU slow model loading due to contention by using sequential loading + broadcasting. See: https://github.com/Tencent/HunyuanVideo-I2V/issues/36
+ - Fixed 193-frame limit (8-sec) using Riflex extension method by thu-ml to allow more frames without looping
+ - Fixed "not enough values to unpack" in latent extraction for training.
+ - Bonus scripts for setVideosTo129Frames.py to batch stretch/pad your training videos to 129 frames and stageTrainingDataforDiffusionPipe.py for reformatting files for re-use in Diffusion Pipe (for Wan, Hunyuan T2V, etc)
+ 
+ Original code/repo: https://github.com/Tencent/HunyuanVideo-I2V
+ 
+ <hr>
+ 
 <!-- ## **HunyuanVideo** -->
 
 [中文阅读](./README_zh.md)
