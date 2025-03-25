@@ -559,7 +559,8 @@ class HunyuanVideoSampler(Inference):
             if args.use_lora:
                 self.pipeline = load_lora_for_pipeline(
                     self.pipeline, args.lora_path, LORA_PREFIX_TRANSFORMER="Hunyuan_video_I2V_lora", alpha=args.lora_scale,
-                    device=self.device)
+                    device=self.device,
+                    is_parallel=(self.parallel_args['ulysses_degree'] > 1 or self.parallel_args['ring_degree'] > 1))
                 logger.info(f"load lora {args.lora_path} into pipeline, lora scale is {args.lora_scale}.")
         else:
             self.default_negative_prompt = NEGATIVE_PROMPT

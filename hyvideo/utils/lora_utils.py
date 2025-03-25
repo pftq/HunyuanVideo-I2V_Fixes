@@ -10,9 +10,15 @@ def load_lora_for_pipeline(
     LORA_PREFIX_TEXT_ENCODER="",
     alpha=1.0,
     device=0,
+    is_parallel=False
 ):
     # load LoRA weight from .safetensors
-    state_dict = load_file(lora_path, device=device)
+    if is_parallel:
+        state_dict = load_file(lora_path, device="cpu")
+        for k, v in state_dict.items():
+            state_dict[k] = v.to(device)
+    else:
+        state_dict = load_file(lora_path, device=device)
 
     visited = []
 
