@@ -67,6 +67,7 @@
 
 - ComfyUI (支持FP8推理、V2V和IP2V生成): [ComfyUI-HunyuanVideoWrapper](https://github.com/kijai/ComfyUI-HunyuanVideoWrapper) by [Kijai](https://github.com/kijai)
 - HunyuanVideoGP (针对低性能GPU的版本): [HunyuanVideoGP](https://github.com/deepbeepmeep/HunyuanVideoGP) by [DeepBeepMeep](https://github.com/deepbeepmeep)
+- xDiT 兼容性改进: [兼容性改进](https://github.com/Tencent/HunyuanVideo-I2V/issues/36#issuecomment-2728068507) by [pftq](https://github.com/pftq)
 
 ## 📑 开源计划
 - HunyuanVideo-I2V（图像到视频模型）

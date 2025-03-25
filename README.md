@@ -1,13 +1,3 @@
-# **Fixes/improvements to base Hunyuan I2V code**
-- Fixed multi-GPU slow model loading due to contention by using sequential loading + broadcasting. See: https://github.com/Tencent/HunyuanVideo-I2V/issues/36
-- Fixed 192-frame limit (8-sec) using Riflex extension method by thu-ml to allow more frames without looping. Video size needs to be "--video-size 720 720" or less with "--i2v-resolution 540p" to avoid memory errors (even with H100 GPU).
-- Fixed "not enough values to unpack" error on training / latent extraction.
-- Added bonus "setVideosTo129Frames.py" script for stretching/padding all videos to 129 frames (or whatever you configure, open the .py file) to be usable for training and also "stageTrainingDataforDiffusionPipe.py" for converting the dataset (json to txt etc) for use with Diffusion Pipe if you want to train on Wan, etc next.
-
-Original code/repo: https://github.com/Tencent/HunyuanVideo-I2V
-
-<hr>
-
 <!-- ## **HunyuanVideo** -->
 
 [中文阅读](./README_zh.md)
@@ -86,7 +76,7 @@ If you develop/use HunyuanVideo-I2V in your projects, welcome to let us know.
 
 - ComfyUI-Kijai (FP8 Inference, V2V and IP2V Generation): [ComfyUI-HunyuanVideoWrapper](https://github.com/kijai/ComfyUI-HunyuanVideoWrapper) by [Kijai](https://github.com/kijai)
 - HunyuanVideoGP (GPU Poor version): [HunyuanVideoGP](https://github.com/deepbeepmeep/HunyuanVideoGP) by [DeepBeepMeep](https://github.com/deepbeepmeep)
-
+- xDiT compatibility improvement: [xDiT compatibility improvement](https://github.com/Tencent/HunyuanVideo-I2V/issues/36#issuecomment-2728068507) by [pftq](https://github.com/pftq)
 
 ## 📑 Open-source Plan
 - HunyuanVideo-I2V (Image-to-Video Model)
