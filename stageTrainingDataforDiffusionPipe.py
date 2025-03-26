@@ -6,6 +6,7 @@ Script to flatten a dataset directory, rename files, convert frame rates, trunca
 - Moves all files out of subfolders to the root of output_dir
 - Converts video frame rates to specified framerate (if framerate > 0), showing start and final frame counts
 - Truncates videos to specified framecap (if framecap > 0 and frame count exceeds cap)
+- Matches the bitrate of the original video during processing
 - Renames JSON files to .txt and retains only the 'long caption' values
 
 Configure settings below.
@@ -31,7 +32,7 @@ framerate = -1                   # Target frame rate for videos; -1 to keep orig
 framecap = -1                    # Maximum frame count for videos; -1 to keep original frame count
 
 def get_video_info(file_path):
-    """Get frame count and frame rate of a video using ffprobe."""
+    """Get frame count, frame rate, and bitrate of a video using ffprobe."""
     try:
         probe = ffmpeg.probe(file_path)
         video_stream = next(
@@ -41,6 +42,7 @@ def get_video_info(file_path):
         if not video_stream:
             raise ValueError("No video stream found")
         
+        # Get frame count
         if "nb_frames" in video_stream:
             frame_count = int(video_stream["nb_frames"])
         else:
@@ -48,27 +50,42 @@ def get_video_info(file_path):
             fps = eval(video_stream["r_frame_rate"])
             frame_count = int(duration * fps)
         
+        # Get frame rate
         fps = eval(video_stream["r_frame_rate"])
-        return frame_count, fps
+        
+        # Get bitrate (try video stream first, then format)
+        bitrate = video_stream.get("bit_rate")
+        if bitrate is None:
+            bitrate = probe["format"].get("bit_rate")
+        if bitrate is not None:
+            bitrate = int(bitrate)  # Convert to integer (in bits per second)
+        else:
+            print(f"Warning: Could not determine bitrate for {file_path}, using default")
+            bitrate = None  # FFmpeg will choose a default if None
+        
+        return frame_count, fps, bitrate
     except ffmpeg.Error as e:
         print(f"Error probing {file_path}: {e.stderr.decode()}")
-        return None, None
+        return None, None, None
 
-def convert_frame_rate(input_file, output_file, target_framerate):
+def convert_frame_rate(input_file, output_file, target_framerate, bitrate):
     """Convert the frame rate of a video file using FFmpeg and return the frame count after conversion."""
     try:
         stream = ffmpeg.input(input_file)
-        stream = stream.output(
-            output_file,
-            r=target_framerate,  # Set the target frame rate (restores original behavior)
-            vcodec="libx264",
-            acodec="aac",
-            map_metadata=0,
-            y=None
-        )
+        output_args = {
+            "r": target_framerate,  # Set the target frame rate
+            "vcodec": "libx264",
+            "acodec": "aac",
+            "map_metadata": 0,
+            "y": None
+        }
+        if bitrate is not None:
+            output_args["b:v"] = bitrate  # Set the video bitrate to match the original
+        
+        stream = stream.output(output_file, **output_args)
         stream.run(quiet=True)
         
-        frame_count, _ = get_video_info(output_file)
+        frame_count, _, _ = get_video_info(output_file)
         if frame_count is None:
             print(f"Warning: Could not determine frame count after frame rate conversion for {output_file}")
             frame_count = "unknown"
@@ -78,22 +95,24 @@ def convert_frame_rate(input_file, output_file, target_framerate):
         print(f"Error converting frame rate for {input_file}: {e.stderr.decode()}")
         return None
 
-def truncate_frame_count(input_file, output_file, framecap):
+def truncate_frame_count(input_file, output_file, framecap, bitrate):
     """Truncate the frame count of a video file to the specified framecap using FFmpeg."""
     try:
         stream = ffmpeg.input(input_file)
-        # Adjust for FFmpeg's trim behavior (end_frame is exclusive, so add 1 to get exact framecap)
-        stream = stream.filter("trim", end_frame=framecap)
-        stream = stream.output(
-            output_file,
-            vcodec="libx264",
-            acodec="aac",
-            map_metadata=0,
-            y=None
-        )
+        stream = stream.filter("trim", end_frame=framecap )
+        output_args = {
+            "vcodec": "libx264",
+            "acodec": "aac",
+            "map_metadata": 0,
+            "y": None
+        }
+        if bitrate is not None:
+            output_args["b:v"] = bitrate  # Set the video bitrate to match the original
+        
+        stream = stream.output(output_file, **output_args)
         stream.run(quiet=True)
         
-        frame_count, _ = get_video_info(output_file)
+        frame_count, _, _ = get_video_info(output_file)
         if frame_count is None:
             print(f"Warning: Could not determine frame count after truncation for {output_file}")
             frame_count = "unknown"
@@ -106,8 +125,8 @@ def truncate_frame_count(input_file, output_file, framecap):
 def process_video(input_file, output_file, target_framerate, framecap):
     """Process a video file: convert frame rate (if specified) and truncate frame count (if exceeds framecap)."""
     try:
-        # Get the starting frame count of the input video
-        start_frame_count, _ = get_video_info(input_file)
+        # Get the starting frame count, frame rate, and bitrate of the input video
+        start_frame_count, _, bitrate = get_video_info(input_file)
         if start_frame_count is None:
             print(f"Warning: Could not determine starting frame count for {input_file}")
             start_frame_count = "unknown"
@@ -126,7 +145,7 @@ def process_video(input_file, output_file, target_framerate, framecap):
         if target_framerate > 0:
             with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as temp_file:
                 intermediate_file = temp_file.name
-            current_frame_count = convert_frame_rate(input_file, intermediate_file, target_framerate)
+            current_frame_count = convert_frame_rate(input_file, intermediate_file, target_framerate, bitrate)
             if current_frame_count is None:
                 current_frame_count = "unknown"
             print(f"Converted frame rate of {input_file} to {target_framerate} FPS (start frame count: {start_frame_count}, after frame rate conversion: {current_frame_count})")
@@ -135,10 +154,10 @@ def process_video(input_file, output_file, target_framerate, framecap):
         # Pass 2: Truncation (if frame count exceeds framecap)
         final_frame_count = current_frame_count
         if framecap > 0 and (current_frame_count != "unknown" and current_frame_count > framecap):
-            final_frame_count = truncate_frame_count(current_file, output_file, framecap)
+            final_frame_count = truncate_frame_count(current_file, output_file, framecap, bitrate)
             if final_frame_count is None:
                 final_frame_count = "unknown"
-            print(f"Truncated {input_file} to framecap {framecap} (after frame rate conversion: {current_frame_count}, final frame count: {final_frame_count})")
+            print(f"Truncated {input_file} to framecap {framecap} (final frame count: {final_frame_count})")
         else:
             # No truncation needed, copy the intermediate (or original) file to the final output
             shutil.copy2(current_file, output_file)
