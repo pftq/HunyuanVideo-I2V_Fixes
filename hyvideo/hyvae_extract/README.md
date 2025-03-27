@@ -29,6 +29,8 @@ The format of meta_file.list (e.g., ./assets/demo/i2v_lora/train_dataset/meta_fi
 ...
 ```
 
+`IMPORTANT: Make sure each video's video_id is unique!!!`
+
 The format of /path/to/0.json (e.g., ./assets/demo/i2v_lora/train_dataset/meta_data.json) is as follows
 ```json
 {
@@ -96,6 +98,7 @@ The program generates the following files in the specified output directory:
    - video_path: Original video path
    - prompt: Video description/prompt
    - npy_save_path: Path where the latent features are saved
+
 
 ```
 output_base_dir/

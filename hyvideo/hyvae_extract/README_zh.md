@@ -28,6 +28,8 @@ meta_file.list的格式（例如，./assets/demo/i2v_lora/train_dataset/meta_fil
 ...
 ```
 
+`重要: 确保每个视频的名字是唯一的!!!`
+
 /path/to/0.json的格式（例如，./assets/demo/i2v_lora/train_dataset/meta_data.json）如下：
 ```json
 {
@@ -95,6 +97,7 @@ CUDA_VISIBLE_DEVICES=0 python3 -u hyvideo/hyvae_extract/run.py --local_rank 0 --
    - video_path: 原始视频路径
    - prompt: 视频描述/提示
    - npy_save_path: 保存潜在特征的路径
+
 
 ```
 output_base_dir/
