@@ -721,7 +721,6 @@ class HunyuanVideoSampler(Inference):
         i2v_stability=True,
         ulysses_degree=1,
         ring_degree=1,
-        xdit_adaptive_size=True,
         **kwargs,
     ):
         out_dict = dict()
@@ -820,25 +819,30 @@ class HunyuanVideoSampler(Inference):
             closest_size, closest_ratio = get_closest_ratio(origin_size[1], origin_size[0], aspect_ratios, crop_size_list)
 
             if ulysses_degree != 1 or ring_degree != 1:
-                closest_size = (height, width)
-                resize_param = min(closest_size)
-                center_crop_param = closest_size
+                diviser = get_sequence_parallel_world_size() * 8 * 2
+                if closest_size[0] % diviser != 0 and closest_size[1] % diviser != 0:
+                    xdit_crop_size_list = list(filter(lambda x: x[0] % diviser == 0 or x[1] % diviser == 0, crop_size_list))
+                    xdit_aspect_ratios = np.array([round(float(h)/float(w), 5) for h, w in xdit_crop_size_list])
+                    xdit_closest_size, closest_ratio = get_closest_ratio(origin_size[1], origin_size[0], xdit_aspect_ratios, xdit_crop_size_list)
 
-                if xdit_adaptive_size:
-                    original_h, original_w = origin_size[1], origin_size[0]
-                    target_h, target_w = height, width
+                    assert os.getenv("ALLOW_RESIZE_FOR_SP") is not None, \
+                        f"The image resolution is {origin_size}. " \
+                        f"Based on the input i2v-resultion ({i2v_resolution}), " \
+                        f"the closest ratio of resolution supported by HunyuanVideo-I2V is ({closest_size[1]}, {closest_size[0]}), " \
+                        f"the latent resolution of which is ({closest_size[1] // 16}, {closest_size[0] // 16}). " \
+                        f"You run the program with {get_sequence_parallel_world_size()} GPUs " \
+                        f"(SP degree={get_sequence_parallel_world_size()}). " \
+                        f"However, neither of the width ({closest_size[1] // 16}) or the " \
+                        f"height ({closest_size[0] // 16}) " \
+                        f"is divisible by the SP degree ({get_sequence_parallel_world_size()}). " \
+                        f"Please set ALLOW_RESIZE_FOR_SP=1 in the environment to allow xDiT to resize the image to {xdit_closest_size}. " \
+                        f"If you do not want to resize the image, please try other SP degrees and rerun the program. "
 
-                    scale_w = target_w / original_w
-                    scale_h = target_h / original_h
-                    scale = max(scale_w, scale_h)
+                    logger.debug(f"xDiT resizes the input image to {xdit_closest_size}.")
+                    closest_size = xdit_closest_size
 
-                    new_w = int(original_w * scale)
-                    new_h = int(original_h * scale)
-                    resize_param = (new_h, new_w)
-                    center_crop_param = (target_h, target_w)
-            else:
-                resize_param = min(closest_size)
-                center_crop_param = closest_size
+            resize_param = min(closest_size)
+            center_crop_param = closest_size
 
             ref_image_transform = transforms.Compose([
                 transforms.Resize(resize_param),
@@ -878,8 +882,7 @@ class HunyuanVideoSampler(Inference):
         if ulysses_degree != 1 or ring_degree != 1:
             debug_str += f"""
                 ulysses_degree: {ulysses_degree}
-                   ring_degree: {ring_degree}
-            xdit_adaptive_size: {xdit_adaptive_size}"""
+                   ring_degree: {ring_degree}"""
         logger.debug(debug_str)
 
         start_time = time.time()

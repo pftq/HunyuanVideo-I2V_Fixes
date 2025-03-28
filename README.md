@@ -76,7 +76,7 @@ If you develop/use HunyuanVideo-I2V in your projects, welcome to let us know.
 
 - ComfyUI-Kijai (FP8 Inference, V2V and IP2V Generation): [ComfyUI-HunyuanVideoWrapper](https://github.com/kijai/ComfyUI-HunyuanVideoWrapper) by [Kijai](https://github.com/kijai)
 - HunyuanVideoGP (GPU Poor version): [HunyuanVideoGP](https://github.com/deepbeepmeep/HunyuanVideoGP) by [DeepBeepMeep](https://github.com/deepbeepmeep)
-- xDiT compatibility improvement: [xDiT compatibility improvement](https://github.com/Tencent/HunyuanVideo-I2V/issues/36#issuecomment-2728068507) by [pftq](https://github.com/pftq)
+- xDiT compatibility improvement: [xDiT compatibility improvement](https://github.com/Tencent/HunyuanVideo-I2V/issues/36#issuecomment-2728068507) by [pftq](https://github.com/pftq) and [xibosun](https://github.com/xibosun)
 
 ## 📑 Open-source Plan
 - HunyuanVideo-I2V (Image-to-Video Model)
@@ -380,7 +380,8 @@ For example, to generate a video with 8 GPUs, you can use the following command:
 ```bash
 cd HunyuanVideo-I2V
 
-torchrun --nproc_per_node=8 sample_image2video.py \
+ALLOW_RESIZE_FOR_SP=1 torchrun --nproc_per_node=8 \
+    sample_image2video.py \
     --model HYVideo-T/2 \
     --prompt "An Asian man with short hair in black tactical uniform and white clothes waves a firework stick." \
     --i2v-mode \
@@ -395,44 +396,14 @@ torchrun --nproc_per_node=8 sample_image2video.py \
     --embedded-cfg-scale 6.0 \
     --save-path ./results \
     --ulysses-degree 8 \
-    --ring-degree 1 \
-    --video-size 1280 720 \
-    --xdit-adaptive-size
+    --ring-degree 1
 ```
 
-You can change the `--ulysses-degree` and `--ring-degree` to control the parallel configurations for the best performance. 
-Note that you need to set `--video-size` since xDiT's acceleration mechanism has requirements for the size of the video to be generated.
-To prevent black padding after converting the original image height/width to the target height/width, you can use `--xdit-adaptive-size`.
-The valid parallel configurations are shown in the following table.
+The number of GPUs equals the product of `--ulysses-degree` and `--ring-degree.` Feel free to adjust these parallel configurations to optimize performance.
 
-<details>
-<summary>Supported Parallel Configurations (Click to expand)</summary>
+xDiT divides the video in the latent space based on either the height or width dimension, depending on which one is divisible by the number of GPUs. Enabling `ALLOW_RESIZE_FOR_SP=1` permits xDiT to slightly adjust the input image size so that the height or width is divisible by the number of GPUs.
 
-|     --video-size     | --video-length | --ulysses-degree x --ring-degree | --nproc_per_node |
-|----------------------|----------------|----------------------------------|------------------|
-| 1280 720 or 720 1280 | 129            | 8x1,4x2,2x4,1x8                  | 8                |
-| 1280 720 or 720 1280 | 129            | 1x5                              | 5                |
-| 1280 720 or 720 1280 | 129            | 4x1,2x2,1x4                      | 4                |
-| 1280 720 or 720 1280 | 129            | 3x1,1x3                          | 3                |
-| 1280 720 or 720 1280 | 129            | 2x1,1x2                          | 2                |
-| 1104 832 or 832 1104 | 129            | 4x1,2x2,1x4                      | 4                |
-| 1104 832 or 832 1104 | 129            | 3x1,1x3                          | 3                |
-| 1104 832 or 832 1104 | 129            | 2x1,1x2                          | 2                |
-| 960 960              | 129            | 6x1,3x2,2x3,1x6                  | 6                |
-| 960 960              | 129            | 4x1,2x2,1x4                      | 4                |
-| 960 960              | 129            | 3x1,1x3                          | 3                |
-| 960 960              | 129            | 1x2,2x1                          | 2                |
-| 960 544 or 544 960   | 129            | 6x1,3x2,2x3,1x6                  | 6                |
-| 960 544 or 544 960   | 129            | 4x1,2x2,1x4                      | 4                |
-| 960 544 or 544 960   | 129            | 3x1,1x3                          | 3                |
-| 960 544 or 544 960   | 129            | 1x2,2x1                          | 2                |
-| 832 624 or 624 832   | 129            | 4x1,2x2,1x4                      | 4                |
-| 624 832 or 624 832   | 129            | 3x1,1x3                          | 3                |
-| 832 624 or 624 832   | 129            | 2x1,1x2                          | 2                |
-| 720 720              | 129            | 1x5                              | 5                |
-| 720 720              | 129            | 3x1,1x3                          | 3                |
-
-</details>
+The speedup of parallel inference is shown as follows.
 
 
 <p align="center">
