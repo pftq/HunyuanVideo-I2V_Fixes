@@ -776,8 +776,6 @@ class HunyuanVideoSampler(Inference):
         target_width = align_to(width, 16)
         target_video_length = video_length
 
-        out_dict["size"] = (target_height, target_width, target_video_length)
-
         if not isinstance(prompt, str):
             raise TypeError(f"`prompt` must be a string, but got {type(prompt)}")
         prompt = [prompt.strip()]
@@ -841,7 +839,23 @@ class HunyuanVideoSampler(Inference):
                     logger.debug(f"xDiT resizes the input image to {xdit_closest_size}.")
                     closest_size = xdit_closest_size
 
-            resize_param = min(closest_size)
+            # 20250329 pftq: Apply aspect ratio preservation to i2v_mode
+            original_ratio = origin_size[1] / origin_size[0]
+            if original_ratio == 1:
+                height_scale_factor = closest_size[0] / origin_size[1]
+                width_scale_factor = closest_size[1] / origin_size[0]
+                if height_scale_factor < width_scale_factor:
+                    closest_size = (closest_size[0], align_to(int(closest_size[0] * original_ratio), 16))
+                else:
+                    closest_size = (align_to(int(closest_size[1] / original_ratio), 16), closest_size[1])
+        
+            closest_size_ratio = closest_size[1] / closest_size[0]
+            if closest_size_ratio == 1. or \
+                (original_ratio > 1 and closest_size_ratio > 1) or \
+                (original_ratio < 1 and closest_size_ratio < 1):
+                resize_param = min(closest_size)
+            else:
+                resize_param = max(closest_size)
             center_crop_param = closest_size
 
             ref_image_transform = transforms.Compose([
