@@ -575,11 +575,6 @@ def add_parallel_args(parser: argparse.ArgumentParser):
         default=1,
         help="Ring degree for xdit parallel args.",
     )
-    group.add_argument(
-        "--xdit-adaptive-size",
-        action="store_true",
-        help="Make the generated video has no black padding.")
-
 
     return parser
 
