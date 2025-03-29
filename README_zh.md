@@ -67,7 +67,7 @@
 
 - ComfyUI (支持FP8推理、V2V和IP2V生成): [ComfyUI-HunyuanVideoWrapper](https://github.com/kijai/ComfyUI-HunyuanVideoWrapper) by [Kijai](https://github.com/kijai)
 - HunyuanVideoGP (针对低性能GPU的版本): [HunyuanVideoGP](https://github.com/deepbeepmeep/HunyuanVideoGP) by [DeepBeepMeep](https://github.com/deepbeepmeep)
-- xDiT 兼容性改进: [兼容性改进](https://github.com/Tencent/HunyuanVideo-I2V/issues/36#issuecomment-2728068507) by [pftq](https://github.com/pftq)
+- xDiT 兼容性改进: [兼容性改进](https://github.com/Tencent/HunyuanVideo-I2V/issues/36#issuecomment-2728068507) by [pftq](https://github.com/pftq) and [xibosun](https://github.com/xibosun)
 
 ## 📑 开源计划
 - HunyuanVideo-I2V（图像到视频模型）
@@ -359,7 +359,8 @@ python3 sample_image2video.py \
 ```bash
 cd HunyuanVideo-I2V
 
-torchrun --nproc_per_node=8 sample_image2video.py \
+ALLOW_RESIZE_FOR_SP=1 torchrun --nproc_per_node=8 \
+    sample_image2video.py \
     --model HYVideo-T/2 \
     --prompt "An Asian man with short hair in black tactical uniform and white clothes waves a firework stick." \
     --i2v-mode \
@@ -374,44 +375,14 @@ torchrun --nproc_per_node=8 sample_image2video.py \
     --embedded-cfg-scale 6.0 \
     --save-path ./results \
     --ulysses-degree 8 \
-    --ring-degree 1 \
-    --video-size 1280 720 \
-    --xdit-adaptive-size
+    --ring-degree 1
 ```
 
-可以配置`--ulysses-degree`和`--ring-degree`来控制并行配置，
-注意，你需要设置 `--video-size`，因为 xDiT 的加速机制对要生成的视频的长宽有要求。
-为了防止将原始图像高度/宽度转换为目标高度/宽度后出现黑色填充，你可以使用 `--xdit-adaptive-size`。
-具体的可选参数如下。
+GPU 的数量等于 `--ulysses-degree` 与 `--ring-degree` 的乘积。您可以更改这些并行配置以获得最佳性能。
 
-<details>
-<summary>支持的并行配置 (点击查看详情)</summary>
+xDiT 在潜在空间中根据高度或宽度维度对视频进行分割，具体取决于哪个维度可以被 GPU 数量整除。设置 `ALLOW_RESIZE_FOR_SP=1` 允许 xDiT 稍微调整输入图像的大小，以使高度或宽度可以被GPU数量整除。
 
-|     --video-size     | --video-length | --ulysses-degree x --ring-degree | --nproc_per_node |
-|----------------------|----------------|----------------------------------|------------------|
-| 1280 720 或 720 1280 | 129            | 8x1,4x2,2x4,1x8                  | 8                |
-| 1280 720 或 720 1280 | 129            | 1x5                              | 5                |
-| 1280 720 或 720 1280 | 129            | 4x1,2x2,1x4                      | 4                |
-| 1280 720 或 720 1280 | 129            | 3x1,1x3                          | 3                |
-| 1280 720 或 720 1280 | 129            | 2x1,1x2                          | 2                |
-| 1104 832 或 832 1104 | 129            | 4x1,2x2,1x4                      | 4                |
-| 1104 832 或 832 1104 | 129            | 3x1,1x3                          | 3                |
-| 1104 832 或 832 1104 | 129            | 2x1,1x2                          | 2                |
-| 960 960              | 129            | 6x1,3x2,2x3,1x6                  | 6                |
-| 960 960              | 129            | 4x1,2x2,1x4                      | 4                |
-| 960 960              | 129            | 3x1,1x3                          | 3                |
-| 960 960              | 129            | 1x2,2x1                          | 2                |
-| 960 544 或 544 960   | 129            | 6x1,3x2,2x3,1x6                  | 6                |
-| 960 544 或 544 960   | 129            | 4x1,2x2,1x4                      | 4                |
-| 960 544 或 544 960   | 129            | 3x1,1x3                          | 3                |
-| 960 544 或 544 960   | 129            | 1x2,2x1                          | 2                |
-| 832 624 或 624 832   | 129            | 4x1,2x2,1x4                      | 4                |
-| 624 832 或 624 832   | 129            | 3x1,1x3                          | 3                |
-| 832 624 或 624 832   | 129            | 2x1,1x2                          | 2                |
-| 720 720              | 129            | 1x5                              | 5                |
-| 720 720              | 129            | 3x1,1x3                          | 3                |
-
-</details>
+xDiT 并行推理加速如下表所示。
 
 <p align="center">
 <table align="center">
