@@ -4,7 +4,7 @@
  - **Major** Fixed 192-frame limit (8-sec) using Riflex extension method by thu-ml to allow more frames without looping
  - **Major** Batch mode ("--batch-size 10") implemented for multiple videos without reloading the model.
  - Variety batch ("--variety-batch") option for varying up CFG/Steps between videos in a batch.
- - Prompt details embedded in MP4 video metadata comments.
+ - Prompt details embedded in MP4 video metadata comments (requires ffmpeg installed: apt-get install -y ffmpeg).
  - More useful filenames with CFG, Steps, seed, lora name, #GPUs, etc.
  - Maintained aspect ratio for resizing to divide evenly among GPUs in multi-GPU.
  - Fixed "not enough values to unpack" in latent extraction for training.
