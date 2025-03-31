@@ -12,6 +12,71 @@
  
  Original code/repo: https://github.com/Tencent/HunyuanVideo-I2V
 
+ The install instructions on the original repo are very finicky.  My own suggested install commands (exclude the venv lines if you're not using cloud/rented):
+```
+#create once on new pod
+python -m venv venv
+git clone https://github.com/pftq/HunyuanVideo-I2V_Fixes
+mv HunyuanVideo-I2V_Fixes HunyuanVideo-I2V
+export HF_HOME=/workspace/
+source /workspace/venv/bin/activate
+pip install -r /workspace/HunyuanVideo-I2V/requirements.txt
+pip install flash-attn
+pip install xfuser==0.4.2
+pip install diffusers==0.31.0
+python -m pip install "huggingface_hub[cli]"
+cd /workspace/HunyuanVideo-I2V
+huggingface-cli download tencent/HunyuanVideo-I2V --local-dir ./ckpts
+cd ckpts
+huggingface-cli download xtuner/llava-llama-3-8b-v1_1-transformers --local-dir ./text_encoder_i2v
+huggingface-cli download openai/clip-vit-large-patch14 --local-dir ./text_encoder_2
+cd ../
+
+#always run at the start to use persisting drive
+export HF_HOME=/workspace/
+cd /workspace/HunyuanVideo-I2V
+source /workspace/venv/bin/activate
+apt-get update
+apt-get install -y ffmpeg
+pip install ffmpeg-python
+```
+
+Example prompt for multi-GPU (8 GPUs) with batch mode, variety batch, and temporal parallelization:
+```
+GPUs=8
+CFG=6
+Steps=40
+Frames=121
+Batch=50
+ALLOW_RESIZE_FOR_SP=1 torchrun --nproc_per_node=$GPUs \
+sample_image2video.py \
+--model HYVideo-T/2 \
+--prompt "" \
+--neg-prompt "" \
+--i2v-mode \
+--i2v-image-path "image.jpg" \
+--i2v-resolution 720p \
+--video-length $Frames \
+--cfg-scale $CFG \
+--infer-steps $Steps \
+--flow-reverse \
+--i2v-stability \
+--flow-shift 7.0 \
+--embedded-cfg-scale 1.0 \
+--save-path ./results \
+--video-size 480 480 \
+--batch-size $Batch \
+--variety-batch \
+--ulysses-degree $GPUs \
+--ring-degree 1 \
+--use-temporal-parallelization
+```
+and add these if you want to use a lora
+```
+--use-lora \
+--lora-scale 1 \
+--lora-path ./name-of-lora.safetensors
+```
  <hr>
 
 <!-- ## **HunyuanVideo** -->
