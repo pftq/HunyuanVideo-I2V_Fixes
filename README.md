@@ -1,5 +1,5 @@
 # **Fixes/improvements by pftq to base Hunyuan I2V code**
- - **Major** Fixed static noise in multi-GPU due to out of sync seeds when no seed provided.
+ - **Major** Fixed static noise in multi-GPU due to out of sync seeds when no seed provided. See: https://github.com/Tencent/HunyuanVideo-I2V/issues/35
  - **Major** Fixed multi-GPU slow model loading due to contention by using sequential loading + broadcasting. See: https://github.com/Tencent/HunyuanVideo-I2V/issues/36
  - **Major** Fixed 192-frame limit (8-sec) using Riflex extension method by thu-ml to allow more frames without looping
  - **Major** Batch mode ("--batch-size 10") implemented for multiple videos without reloading the model.
