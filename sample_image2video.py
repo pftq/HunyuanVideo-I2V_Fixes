@@ -321,7 +321,7 @@ def main():
                 if check_ffmpeg_installed(): # 20250329 pftq: higher quality bitrate if ffmpeg is installed
                     save_video_with_ffmpeg(samples[i].permute(1, 2, 3, 0), output_path=cur_save_path, fps=24, bitrate_mbps=15, metadata_comment=reconstruct_command_line(args))
                 else:
-                    logger.info("FFMPEG not installed, falling back to default video encoder... "+str(e))
+                    logger.info("FFMPEG not installed, falling back to default video encoder... ")
                     sample = samples[i].unsqueeze(0)
                     save_videos_grid(sample, cur_save_path, fps=24)
                     # 20250328 pftq: Save prompt to video comments metadata
