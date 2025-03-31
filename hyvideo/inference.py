@@ -728,10 +728,25 @@ class HunyuanVideoSampler(Inference):
         if isinstance(seed, torch.Tensor):
             seed = seed.tolist()
         if seed is None:
+            """
+            #Original, static noise issue on multi-GPU
             seeds = [
                 random.randint(0, 1_000_000)
                 for _ in range(batch_size * num_videos_per_prompt)
             ]
+            """
+            # 20250330 pftq: fix static noise on multi-GPU from seeds out of sync
+            seeds = []
+            if dist.is_initialized():
+                if int(os.getenv("RANK", 0)) == 0:
+                    seeds = [random.randint(0, 1_000_000) for _ in range(batch_size * num_videos_per_prompt)]
+                else:
+                    seeds = [None] * (batch_size * num_videos_per_prompt)
+                dist.broadcast_object_list(seeds, src=0)
+            else:
+                seeds = [random.randint(0, 1_000_000) for _ in range(batch_size * num_videos_per_prompt)]
+            
+            ############################
         elif isinstance(seed, int):
             seeds = [
                 seed + i
@@ -758,6 +773,43 @@ class HunyuanVideoSampler(Inference):
             )
         generator = [torch.Generator(self.device).manual_seed(seed) for seed in seeds]
         out_dict["seeds"] = seeds
+
+        ###########################
+        # 20250330 pftq: quality degradation on multi-GPU from other parameters out of sync
+        otherParams = []
+        if dist.is_initialized():
+            if int(os.getenv("RANK", 0)) == 0:
+                otherParams = [
+                                prompt,
+                                negative_prompt,
+                                infer_steps,
+                                guidance_scale,
+                                flow_shift,
+                                embedded_guidance_scale,
+                                i2v_image_path,
+                              ]
+            else:
+                otherParams = [None] * 7
+            dist.broadcast_object_list(otherParams, src=0)
+        else:
+            otherParams = [
+                                prompt,
+                                negative_prompt,
+                                infer_steps,
+                                guidance_scale,
+                                flow_shift,
+                                embedded_guidance_scale,
+                                i2v_image_path,
+                              ]
+        prompt = otherParams[0]
+        negative_prompt = otherParams[1]
+        infer_steps = otherParams[2]
+        guidance_scale = otherParams[3]
+        flow_shift = otherParams[4]
+        embedded_guidance_scale = otherParams[5]
+        i2v_image_path = otherParams[6]
+        
+        ############################
 
         if width <= 0 or height <= 0 or video_length <= 0:
             raise ValueError(
