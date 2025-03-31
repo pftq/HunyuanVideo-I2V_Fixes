@@ -20,11 +20,9 @@ python -m venv venv
 git clone https://github.com/pftq/HunyuanVideo-I2V_Fixes
 mv HunyuanVideo-I2V_Fixes HunyuanVideo-I2V
 export HF_HOME=/workspace/
-pip install -r /workspace/HunyuanVideo-I2V/requirements.txt
-pip install flash-attn
 source /workspace/venv/bin/activate
 pip install -r /workspace/HunyuanVideo-I2V/requirements.txt
-pip install flash-attn
+pip install flash_attn --no-build-isolation
 pip install xfuser==0.4.2
 pip install diffusers==0.31.0
 python -m pip install "huggingface_hub[cli]"
