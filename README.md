@@ -9,6 +9,8 @@
  - Maintained aspect ratio when resizing to divide evenly among GPUs in multi-GPU spatial parallelization.
  - Fixed "not enough values to unpack" in latent extraction for training.
  - Bonus scripts for setVideosTo129Frames.py to batch stretch/pad your training videos to 129 frames and stageTrainingDataforDiffusionPipe.py for reformatting files for re-use in Diffusion Pipe (for Wan, Hunyuan T2V, etc)
+
+   **WIP**: Temporal paralleliation via "--use-temporal-parallelization" flag.  Unfortunately having trouble finishing the implementation without static noise breaks between the parts from different GPUs.  Otherwise the parallelization code is done and outputs without errors.  The bulk of the code is in inference.py (parallelize_transformer_temporal).  If anyone would like to give it a shot, this fork exists as a save for how far I got with it. 
  
  Original code/repo: https://github.com/Tencent/HunyuanVideo-I2V
 
