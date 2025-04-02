@@ -260,10 +260,10 @@ def main():
             if idx >= variety_range: # reset the seed after one pass through all CFG
                 args.seed = None
             if args.cfg_scale>1:
-                variety_range = (20-args.cfg_scale)/2
+                variety_range = int(max(4, (20-args.cfg_scale)/2))
                 cfgdelta = (idx % variety_range)*2
             else:
-                variety_range = (20-args.embedded_cfg_scale)/2
+                variety_range = int(max(4, (20-args.embedded_cfg_scale)/2))
                 embeddeddelta = (idx % variety_range)*2
             stepsdelta = int(idx // variety_range) * 10
             if stepsdelta>125:
