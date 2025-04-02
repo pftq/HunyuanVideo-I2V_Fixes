@@ -41,6 +41,18 @@ except:
     initialize_model_parallel = None
     init_distributed_environment = None
 
+# 20250331 pftq: para-attn for temporal parallelism
+"""
+try:
+    from para_attn.context_parallel import init_context_parallel_mesh
+    from para_attn.context_parallel.diffusers_adapters import parallelize_pipe
+    from para_attn.parallel_vae.diffusers_adapters import parallelize_vae
+except ImportError:
+    init_context_parallel_mesh = None
+    parallelize_pipe = None
+    parallelize_vae = None
+    logger.warning("para_attn not available; parallelism disabled.")
+"""
 
 ###############################################
 # 20250308 pftq: Riflex workaround to fix 192-frame-limit bug, credit to Kijai for finding it in ComfyUI and thu-ml for making it
@@ -172,6 +184,151 @@ def parallelize_transformer(pipe):
 
     new_forward = new_forward.__get__(transformer)
     transformer.forward = new_forward
+
+#######################################
+# 20250331 pftq: temporal parallelization instead for less issues with resizing/divisibility.  Each GPU has the full video context in memory to avoid stitching/continuity issues. 
+
+# xfuser approach but causes static noise between out from different GPUs
+def parallelize_transformer_temporal(pipe):
+    transformer = pipe.transformer
+    original_forward = transformer.forward
+
+    @functools.wraps(transformer.__class__.forward)
+    def new_forward(
+        self,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        text_states: torch.Tensor = None,
+        text_mask: torch.Tensor = None,
+        text_states_2: Optional[torch.Tensor] = None,
+        freqs_cos: Optional[torch.Tensor] = None,
+        freqs_sin: Optional[torch.Tensor] = None,
+        guidance: torch.Tensor = None,
+        return_dict: bool = True,
+    ):
+        if (not dist.is_initialized() or xfuser is None or 
+            get_sequence_parallel_world_size() is None or get_sequence_parallel_world_size() == 1):
+            logger.debug("Running in single-GPU mode or xfuser unavailable, bypassing temporal parallelism")
+            return original_forward(x, t, text_states, text_mask, text_states_2, freqs_cos, freqs_sin, guidance, return_dict)
+
+        world_size = get_sequence_parallel_world_size()
+        rank = get_sequence_parallel_rank()
+        total_frames, H, W = x.shape[2], x.shape[3], x.shape[4]
+        logger.debug(f"Rank {rank}: x.shape={x.shape}, total_frames={total_frames}")
+
+        if total_frames % world_size != 0:
+            raise ValueError(
+                f"Total latent frames ({total_frames}) must be divisible by world_size ({world_size})."
+            )
+
+        # VAE scale factor
+        if hasattr(pipe, 'vae') and "884" in pipe.vae.__class__.__name__.lower():
+            vae_scale_factor_temporal = 4
+        elif hasattr(pipe, 'vae') and "888" in pipe.vae.__class__.__name__.lower():
+            vae_scale_factor_temporal = 8
+        else:
+            vae_scale_factor_temporal = 1
+
+        patch_size = transformer.patch_size
+        if isinstance(patch_size, (list, tuple)):
+            patch_size_temporal, patch_size_h, patch_size_w = patch_size
+        else:
+            patch_size_temporal = patch_size_h = patch_size_w = patch_size
+
+        latent_temporal_size = (total_frames - 1) // vae_scale_factor_temporal + 1
+        temporal_size = latent_temporal_size // patch_size_temporal
+        h = H // patch_size_h
+        w = W // patch_size_w
+        total_rope_tokens = temporal_size * h * w
+        logger.debug(f"Rank {rank}: Rope sizes [t, h, w] = [{temporal_size}, {h}, {w}], total_rope_tokens={total_rope_tokens}")
+
+        # Adjust freqs_cos and freqs_sin if mismatched
+        dim_thw = freqs_cos.shape[-1]
+        if freqs_cos.shape[0] != total_rope_tokens:
+            logger.debug(f"Adjusting freqs_cos from {freqs_cos.shape[0]} to {total_rope_tokens} rope tokens")
+            orig_temporal_size = freqs_cos.shape[0] // (h * w)
+            freqs_cos = freqs_cos.reshape(orig_temporal_size, h, w, dim_thw)
+            freqs_sin = freqs_sin.reshape(orig_temporal_size, h, w, dim_thw)
+            repeat_factor = (temporal_size + orig_temporal_size - 1) // orig_temporal_size
+            freqs_cos = freqs_cos.repeat(repeat_factor, 1, 1, 1)[:temporal_size].reshape(-1, dim_thw)
+            freqs_sin = freqs_sin.repeat(repeat_factor, 1, 1, 1)[:temporal_size].reshape(-1, dim_thw)
+            logger.debug(f"Adjusted freqs_cos shape: {freqs_cos.shape}")
+
+        # Chunk latent tensor
+        frames_per_rank = total_frames // world_size
+        x_chunk = x[:, :, rank * frames_per_rank:(rank + 1) * frames_per_rank, :, :]
+        logger.debug(f"Rank {rank}: x_chunk.shape={x_chunk.shape}")
+
+        # Chunk rotary embeddings
+        rope_tokens_per_frame = h * w
+        temporal_size_per_rank = temporal_size // world_size
+        rope_tokens_per_rank = temporal_size_per_rank * rope_tokens_per_frame
+        if total_rope_tokens % world_size != 0:
+            raise ValueError(
+                f"Total rope tokens ({total_rope_tokens}) must be divisible by world_size ({world_size})."
+            )
+        start_token = rank * rope_tokens_per_rank
+        end_token = (rank + 1) * rope_tokens_per_rank
+        freqs_cos_chunk = freqs_cos[start_token:end_token]
+        freqs_sin_chunk = freqs_sin[start_token:end_token]
+        logger.debug(f"Rank {rank}: freqs_cos_chunk.shape={freqs_cos_chunk.shape}")
+
+        # Validate chunking
+        expected_rope_tokens = temporal_size_per_rank * rope_tokens_per_frame
+        if freqs_cos_chunk.shape[0] != expected_rope_tokens:
+            logger.error(f"Rank {rank}: RoPE token mismatch. Expected {expected_rope_tokens}, got {freqs_cos_chunk.shape[0]}")
+            raise ValueError("Rope token chunking does not align with latent frame chunking")
+
+        # Synchronize text embeddings
+        if dist.is_initialized():
+            if text_states is not None:
+                dist.broadcast(text_states, src=0)
+            if text_states_2 is not None:
+                dist.broadcast(text_states_2, src=0)
+            if text_mask is not None:
+                dist.broadcast(text_mask, src=0)
+
+        # Apply xFuserLongContextAttention for temporal parallelism
+        from xfuser.core.long_ctx_attention import xFuserLongContextAttention
+        for block in transformer.double_blocks + transformer.single_blocks:
+            if not hasattr(block, 'hybrid_seq_parallel_attn') or not isinstance(block.hybrid_seq_parallel_attn, xFuserLongContextAttention):
+                block.hybrid_seq_parallel_attn = xFuserLongContextAttention()
+                logger.debug(f"Rank {rank}: Set hybrid_seq_parallel_attn to xFuserLongContextAttention")
+
+        # Forward pass
+        output = original_forward(
+            x_chunk,
+            t,
+            text_states,
+            text_mask,
+            text_states_2,
+            freqs_cos_chunk,
+            freqs_sin_chunk,
+            guidance,
+            return_dict,
+        )
+
+        sample = output["x"] if return_dict else output[0]
+
+        # Gather results
+        sp_group = get_sp_group()
+        logger.debug(f"Rank {rank}: Gathering with group type {type(sp_group).__name__}")
+        gathered_samples = torch.empty_like(x, device=x.device)
+        if hasattr(sp_group, 'all_gather'):
+            sample = sp_group.all_gather(sample, dim=2)
+        else:
+            dist.all_gather_into_tensor(gathered_samples, sample, group=dist.group.WORLD)
+            sample = gathered_samples
+
+        if return_dict:
+            output["x"] = sample
+            return output
+        return (sample,)
+
+    new_forward = new_forward.__get__(transformer)
+    transformer.forward = new_forward
+
+########### end of xfuser temporal parallelization #############
 
 class Inference(object):
     def __init__(
@@ -565,8 +722,47 @@ class HunyuanVideoSampler(Inference):
         else:
             self.default_negative_prompt = NEGATIVE_PROMPT
 
+        # 20250330 pftq: Allow choice of spatial vs temporal parallelization based on use_temporal_parallelization boolean
+        
+        # using xfuser only, results in static noise breaks between output from different GPUs
+        self.use_temporal_parallelization = getattr(args, 'use_temporal_parallelization', False)
         if self.parallel_args['ulysses_degree'] > 1 or self.parallel_args['ring_degree'] > 1:
-            parallelize_transformer(self.pipeline)
+            if self.use_temporal_parallelization:
+                logger.info("Applying temporal parallelization")
+                parallelize_transformer_temporal(self.pipeline)
+            else:
+                logger.info("Applying spatial parallelization")
+                parallelize_transformer(self.pipeline)
+        
+        
+        """
+        # using para-attn which works in SkyReels (Hunyuan finetune)
+        self.use_temporal_parallelization = getattr(args, 'use_temporal_parallelization', False)
+        if self.parallel_args['ulysses_degree'] > 1 or self.parallel_args['ring_degree'] > 1:
+            if self.use_temporal_parallelization and init_context_parallel_mesh is not None:
+                logger.info("Applying temporal parallelization with para-attn")
+                device_type = self.device.type if isinstance(self.device, torch.device) else self.device.split(':')[0]
+                rank = dist.get_rank()
+                world_size = dist.get_world_size()
+                max_batch_dim_size = 2 if world_size > 1 else 1
+                max_ring_dim_size = int(world_size / max_batch_dim_size)
+                self.mesh = init_context_parallel_mesh(
+                    device_type=device_type,
+                    max_ring_dim_size=max_ring_dim_size,
+                    max_batch_dim_size=max_batch_dim_size,
+                )
+                parallelize_pipe(self.pipeline, mesh=self.mesh)
+                if parallelize_vae is not None and self.mesh is not None:
+                    try:
+                        parallelize_vae(self.pipeline.vae, self.mesh._flatten())
+                        logger.info(f"VAE parallelized with para-attn")
+                    except Exception as e:
+                        logger.warning("VAE parallelization skipped due to incompatibility (not an error): "+str(e))
+                self.pipeline.to(f"cuda:{dist.get_rank()}" if dist.is_initialized() else "cuda")
+            else:
+                logger.info("Applying spatial parallelization with xfuser")
+                parallelize_transformer(self.pipeline)
+        """
 
     def load_diffusion_pipeline(
         self,
@@ -596,7 +792,7 @@ class HunyuanVideoSampler(Inference):
             transformer=model,
             scheduler=scheduler,
             progress_bar_config=progress_bar_config,
-            args=args,
+            args=args
         )
         if self.use_cpu_offload:
             pipeline.enable_sequential_cpu_offload()
@@ -828,6 +1024,43 @@ class HunyuanVideoSampler(Inference):
         target_width = align_to(width, 16)
         target_video_length = video_length
 
+        requested_video_length = video_length  # Store original request
+
+        # 20250331 pftq: Adjust video_length for temporal parallelism and (multiple of 4) + 1
+        world_size = dist.get_world_size() if dist.is_initialized() else 1
+        if self.use_temporal_parallelization and world_size > 1:
+            # Determine VAE scale factor
+            if "884" in self.args.vae:
+                vae_scale_factor_temporal = 4
+            elif "888" in self.args.vae:
+                vae_scale_factor_temporal = 8
+            else:
+                vae_scale_factor_temporal = 1
+    
+            # Base latent frames
+            base_latent_frames = (requested_video_length - 1) // vae_scale_factor_temporal + 1  # e.g., 31 for 121
+    
+            # Adjust latent frames to be divisible by world_size first
+            k = (base_latent_frames + world_size - 1) // world_size  # Ceiling division, e.g., (31 + 4 - 1) // 4 = 8
+            adjusted_latent_frames = k * world_size  # e.g., 8 * 4 = 32
+    
+            # Compute corresponding video_length and ensure (multiple of 4) + 1
+            adjusted_video_length = (adjusted_latent_frames - 1) * vae_scale_factor_temporal + 1  # e.g., (32 - 1) * 4 + 1 = 125
+            while (adjusted_video_length - 1) % 4 != 0 or (adjusted_latent_frames % world_size != 0):
+                adjusted_latent_frames += 1
+                adjusted_video_length = (adjusted_latent_frames - 1) * vae_scale_factor_temporal + 1
+                # Double-check divisibility (redundant but ensures clarity)
+                if adjusted_latent_frames % world_size != 0:
+                    adjusted_latent_frames = ((adjusted_latent_frames + world_size - 1) // world_size) * world_size
+    
+            if adjusted_video_length != requested_video_length:
+                logger.info(
+                    f"Adjusted video_length from {requested_video_length} to {adjusted_video_length} "
+                    f"(latent frames from {base_latent_frames} to {adjusted_latent_frames}) "
+                    f"for world_size={world_size} and vae_scale_factor_temporal={vae_scale_factor_temporal}"
+                )
+            target_video_length = adjusted_video_length
+
         out_dict["size"] = (target_height, target_width, target_video_length)
 
         if not isinstance(prompt, str):
@@ -853,6 +1086,7 @@ class HunyuanVideoSampler(Inference):
 
         img_latents = None
         semantic_images = None
+        
         if i2v_mode:
             if i2v_resolution == "720p":
                 bucket_hw_base_size = 960
@@ -869,40 +1103,41 @@ class HunyuanVideoSampler(Inference):
             crop_size_list = generate_crop_size_list(bucket_hw_base_size, 32)
             aspect_ratios = np.array([round(float(h)/float(w), 5) for h, w in crop_size_list])
             closest_size, closest_ratio = get_closest_ratio(origin_size[1], origin_size[0], aspect_ratios, crop_size_list)
-
-            if ulysses_degree != 1 or ring_degree != 1:
-                diviser = get_sequence_parallel_world_size() * 8 * 2
-                if closest_size[0] % diviser != 0 and closest_size[1] % diviser != 0:
-                    xdit_crop_size_list = list(filter(lambda x: x[0] % diviser == 0 or x[1] % diviser == 0, crop_size_list))
-                    xdit_aspect_ratios = np.array([round(float(h)/float(w), 5) for h, w in xdit_crop_size_list])
-                    xdit_closest_size, closest_ratio = get_closest_ratio(origin_size[1], origin_size[0], xdit_aspect_ratios, xdit_crop_size_list)
-
-                    assert os.getenv("ALLOW_RESIZE_FOR_SP") is not None, \
-                        f"The image resolution is {origin_size}. " \
-                        f"Based on the input i2v-resultion ({i2v_resolution}), " \
-                        f"the closest ratio of resolution supported by HunyuanVideo-I2V is ({closest_size[1]}, {closest_size[0]}), " \
-                        f"the latent resolution of which is ({closest_size[1] // 16}, {closest_size[0] // 16}). " \
-                        f"You run the program with {get_sequence_parallel_world_size()} GPUs " \
-                        f"(SP degree={get_sequence_parallel_world_size()}). " \
-                        f"However, neither of the width ({closest_size[1] // 16}) or the " \
-                        f"height ({closest_size[0] // 16}) " \
-                        f"is divisible by the SP degree ({get_sequence_parallel_world_size()}). " \
-                        f"Please set ALLOW_RESIZE_FOR_SP=1 in the environment to allow xDiT to resize the image to {xdit_closest_size}. " \
-                        f"If you do not want to resize the image, please try other SP degrees and rerun the program. "
-
-                    logger.debug(f"xDiT resizes the input image to {xdit_closest_size}.")
-                    closest_size = xdit_closest_size
-
-            # 20250329 pftq: Apply aspect ratio preservation to i2v_mode
-            original_ratio = origin_size[1] / origin_size[0]
-            if original_ratio == 1:
-                height_scale_factor = closest_size[0] / origin_size[1]
-                width_scale_factor = closest_size[1] / origin_size[0]
-                if height_scale_factor < width_scale_factor:
-                    closest_size = (closest_size[0], int(closest_size[0] * original_ratio))
-                else:
-                    closest_size = (int(closest_size[1] / original_ratio), closest_size[1])
             
+            if not self.use_temporal_parallelization: # 20250330 pftq: only needed for spatial parallelism
+                if ulysses_degree != 1 or ring_degree != 1:
+                    diviser = get_sequence_parallel_world_size() * 8 * 2
+                    if closest_size[0] % diviser != 0 and closest_size[1] % diviser != 0:
+                        xdit_crop_size_list = list(filter(lambda x: x[0] % diviser == 0 or x[1] % diviser == 0, crop_size_list))
+                        xdit_aspect_ratios = np.array([round(float(h)/float(w), 5) for h, w in xdit_crop_size_list])
+                        xdit_closest_size, closest_ratio = get_closest_ratio(origin_size[1], origin_size[0], xdit_aspect_ratios, xdit_crop_size_list)
+    
+                        assert os.getenv("ALLOW_RESIZE_FOR_SP") is not None, \
+                            f"The image resolution is {origin_size}. " \
+                            f"Based on the input i2v-resultion ({i2v_resolution}), " \
+                            f"the closest ratio of resolution supported by HunyuanVideo-I2V is ({closest_size[1]}, {closest_size[0]}), " \
+                            f"the latent resolution of which is ({closest_size[1] // 16}, {closest_size[0] // 16}). " \
+                            f"You run the program with {get_sequence_parallel_world_size()} GPUs " \
+                            f"(SP degree={get_sequence_parallel_world_size()}). " \
+                            f"However, neither of the width ({closest_size[1] // 16}) or the " \
+                            f"height ({closest_size[0] // 16}) " \
+                            f"is divisible by the SP degree ({get_sequence_parallel_world_size()}). " \
+                            f"Please set ALLOW_RESIZE_FOR_SP=1 in the environment to allow xDiT to resize the image to {xdit_closest_size}. " \
+                            f"If you do not want to resize the image, please try other SP degrees and rerun the program. "
+    
+                        logger.debug(f"xDiT resizes the input image to {xdit_closest_size}.")
+                        closest_size = xdit_closest_size
+    
+                # 20250329 pftq: Apply aspect ratio preservation to i2v_mode
+                original_ratio = origin_size[1] / origin_size[0]
+                if original_ratio == 1:
+                    height_scale_factor = closest_size[0] / origin_size[1]
+                    width_scale_factor = closest_size[1] / origin_size[0]
+                    if height_scale_factor < width_scale_factor:
+                        closest_size = (closest_size[0], int(closest_size[0] * original_ratio))
+                    else:
+                        closest_size = (int(closest_size[1] / original_ratio), closest_size[1])
+                
             # 20250328 fix black borders from resizing by xibosun
             closest_size_ratio = closest_size[1] / closest_size[0]
             if closest_size_ratio == 1. or \
@@ -933,7 +1168,7 @@ class HunyuanVideoSampler(Inference):
             target_video_length, target_height, target_width
         )
         n_tokens = freqs_cos.shape[0]
-
+        
         debug_str = f"""
                         height: {target_height}
                          width: {target_width}
