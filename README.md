@@ -9,7 +9,6 @@
  - Maintained aspect ratio when resizing to divide evenly among GPUs in multi-GPU spatial parallelization.
  - Fixed "not enough values to unpack" in latent extraction for training.
  - Bonus scripts for setVideosTo129Frames.py to batch stretch/pad your training videos to 129 frames and stageTrainingDataforDiffusionPipe.py for reformatting files for re-use in Diffusion Pipe (for Wan, Hunyuan T2V, etc)
- - (WIP) New multi-GPU temporal parallelization to avoid resizing/divisibility issues, use via "--use-temporal-parallelization". See: https://github.com/Tencent/HunyuanVideo-I2V/issues/35
  
  Original code/repo: https://github.com/Tencent/HunyuanVideo-I2V
 
