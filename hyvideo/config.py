@@ -581,6 +581,12 @@ def add_parallel_args(parser: argparse.ArgumentParser):
         default=1,
         help="Ring degree for xdit parallel args.",
     )
+    # 20250330 pftq: use temporal parallelization instead to avoid divisibility/resizing issues
+    group.add_argument(
+        "--use-temporal-parallelization",
+        action="store_true",
+        help="Use temporal parallelization instead to avoid divisibility/resizing issues."
+    )
 
     return parser
 
