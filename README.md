@@ -42,7 +42,7 @@ apt-get install -y ffmpeg
 pip install ffmpeg-python
 ```
 
-Example prompt for multi-GPU (8 GPUs) with batch mode, variety batch, and temporal parallelization:
+Example prompt for multi-GPU (8 GPUs) with batch mode + variety batch
 ```
 GPUs=8
 CFG=6
@@ -65,13 +65,40 @@ sample_image2video.py \
 --flow-shift 7.0 \
 --embedded-cfg-scale 1.0 \
 --save-path ./results \
---video-size 480 480 \
+--video-size 960 960 \
 --batch-size $Batch \
 --variety-batch \
 --ulysses-degree $GPUs \
---ring-degree 1 \
---use-temporal-parallelization
+--ring-degree 1 
 ```
+
+For single GPU with batch mode + variety batch
+```
+CFG=6
+Steps=40
+Frames=121
+Batch=50
+python sample_image2video.py \
+--model HYVideo-T/2 \
+--prompt "" \
+--neg-prompt "" \
+--i2v-mode \
+--i2v-image-path "image.jpg" \
+--i2v-resolution 720p \
+--video-length $Frames \
+--cfg-scale $CFG \
+--infer-steps $Steps \
+--flow-reverse \
+--i2v-stability \
+--flow-shift 7.0 \
+--embedded-cfg-scale 1.0 \
+--save-path ./results \
+--video-size 960 960 \
+--batch-size $Batch \
+--use-cpu-offload \
+--variety-batch 
+```
+
 and add these if you want to use a lora
 ```
 --use-lora \
