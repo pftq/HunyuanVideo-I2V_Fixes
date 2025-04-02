@@ -47,16 +47,18 @@ Example prompt for multi-GPU (8 GPUs) with batch mode + variety batch
 GPUs=8
 CFG=6
 Steps=40
-Frames=121
-Batch=50
+Frames=241
+Batch=10
+Resolution=720p
+Size=(960 960)
 ALLOW_RESIZE_FOR_SP=1 torchrun --nproc_per_node=$GPUs \
 sample_image2video.py \
 --model HYVideo-T/2 \
 --prompt "" \
---neg-prompt "" \
+--neg-prompt "chaotic, distortion, morphing, low quality, low resolution, static image, overexposed, deformation, bad hands, bad teeth, bad eyes, bad limbs" \
 --i2v-mode \
 --i2v-image-path "image.jpg" \
---i2v-resolution 720p \
+--i2v-resolution $Resolution \
 --video-length $Frames \
 --cfg-scale $CFG \
 --infer-steps $Steps \
@@ -65,7 +67,7 @@ sample_image2video.py \
 --flow-shift 7.0 \
 --embedded-cfg-scale 1.0 \
 --save-path ./results \
---video-size 960 960 \
+--video-size "${Size[@]}" \
 --batch-size $Batch \
 --variety-batch \
 --ulysses-degree $GPUs \
