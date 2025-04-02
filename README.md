@@ -99,7 +99,7 @@ python sample_image2video.py \
 --variety-batch 
 ```
 
-and add these if you want to use a lora
+and add these if you want to use a lora (don't forget to put the slash at the end of the line above it)
 ```
 --use-lora \
 --lora-scale 1 \
