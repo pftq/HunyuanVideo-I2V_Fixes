@@ -303,6 +303,7 @@ def main():
                 # 20250328 pftq: More useful filename and also updated cfg/steps info if using --variety-batch
                 newcfg = args.cfg_scale+cfgdelta
                 newsteps = args.infer_steps+stepsdelta
+                newembedded = args.embedded_cfg_scale+embeddeddelta
                 loraName=""
                 if args.use_lora:
                     loraName = "_"+args.lora_path.replace("hunyuan_", "").replace("_", "-").replace("./", "lora-").replace(".safetensors", "")
@@ -312,7 +313,7 @@ def main():
                     gpuCount = args.ulysses_degree *  args.ring_degree
                     gpuInName = f'_{gpuCount}xGPU'
                 
-                cur_save_path = f"{save_path}/{time_flag}_hunyuani2v_{args.i2v_resolution}-{args.video_length}f_cfg{newcfg}_steps{newsteps}_embedded{args.embedded_cfg_scale}_flow{args.flow_shift}_seed{outputs['seeds'][i]}_stable-{args.i2v_mode}{loraName}{gpuInName}_{outputs['prompts'][i][:20].replace('/','')}_{idx}.mp4"
+                cur_save_path = f"{save_path}/{time_flag}_hunyuani2v_{args.i2v_resolution}-{args.video_length}f_cfg{newcfg}_steps{newsteps}_embedded{newembedded}_flow{args.flow_shift}_seed{outputs['seeds'][i]}_stable-{args.i2v_mode}{loraName}{gpuInName}_{outputs['prompts'][i][:20].replace('/','')}_{idx}.mp4"
 
                 # temporarily set the arg seed for saving to video file metadata
                 inputSeed = args.seed
