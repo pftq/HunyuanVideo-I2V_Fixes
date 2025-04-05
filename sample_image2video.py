@@ -256,9 +256,9 @@ def main():
         stepsdelta = 0
         embeddeddelta=0
         variety_range=10
+        if idx > 0: # reset the seed so the whole batch isn't the same video
+            args.seed = None
         if args.variety_batch:
-            if idx >= variety_range: # reset the seed after one pass through all CFG
-                args.seed = None
             if args.cfg_scale>1:
                 variety_range = int(max(4, (20-args.cfg_scale)/2))
                 cfgdelta = (idx % variety_range)*2
