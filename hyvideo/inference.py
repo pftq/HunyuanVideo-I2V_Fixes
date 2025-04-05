@@ -873,6 +873,7 @@ class HunyuanVideoSampler(Inference):
             if ulysses_degree != 1 or ring_degree != 1:
                 diviser = get_sequence_parallel_world_size() * 8 * 2
                 if closest_size[0] % diviser != 0 and closest_size[1] % diviser != 0:
+                    crop_size_list = generate_crop_size_list(bucket_hw_base_size, diviser)
                     xdit_crop_size_list = list(filter(lambda x: x[0] % diviser == 0 or x[1] % diviser == 0, crop_size_list))
                     xdit_aspect_ratios = np.array([round(float(h)/float(w), 5) for h, w in xdit_crop_size_list])
                     xdit_closest_size, closest_ratio = get_closest_ratio(origin_size[1], origin_size[0], xdit_aspect_ratios, xdit_crop_size_list)
