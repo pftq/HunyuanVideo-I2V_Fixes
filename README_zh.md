@@ -264,7 +264,7 @@ python3 sample_image2video.py \
 |  `--i2v-stability`    |            False             |                                                         是否使用稳定模式进行 i2v 推理。                                                         |
 |    `--video-length`    |             129               |                                                              生成视频的长度。                                                              |
 |    `--infer-steps`     |              50               |                                                              采样步骤的数量。                                                              |
-|     `--flow-shift`     |             7.0               |                        流匹配调度器的偏移因子。我们建议将`--i2v-stability`设置为 7，以获得更稳定的视频；将`--i2v-stability`设置为 17，以获得更动态的视频                         |
+|     `--flow-shift`     |             7.0               |                        流匹配调度器的偏移因子。我们建议开启`--i2v-stability`时设置为 7，以获得更稳定的视频；关闭`--i2v-stability`时设置为 17，以获得更动态的视频                         |
 |   `--flow-reverse`     |            False              |                                                       如果反转，从 t=1 学习/采样到 t=0。                                                       |
 |        `--seed`        |             None              |                                                   生成视频的随机种子，如果为 None，则初始化一个随机种子。                                                   |
 |  `--use-cpu-offload`   |            False              |                                                使用 CPU 卸载模型加载以节省更多内存，对于高分辨率视频生成是必要的。                                                |
