@@ -9,7 +9,7 @@
 # **HunyuanVideo-I2V** 🌅
 
 <div align="center">
-  <a href="https://github.com/Tencent/HunyuanVideo-I2V"><img src="https://img.shields.io/static/v1?label=HunyuanVideo-I2V Code&message=Github&color=blue"></a> &ensp;
+  <a href="https://github.com/Tencent-Hunyuan/HunyuanVideo-I2V"><img src="https://img.shields.io/static/v1?label=HunyuanVideo-I2V Code&message=Github&color=blue"></a> &ensp;
   <a href="https://aivideo.hunyuan.tencent.com"><img src="https://img.shields.io/static/v1?label=Project%20Page&message=Web&color=green"></a> &ensp;
   <a href="https://video.hunyuan.tencent.com"><img src="https://img.shields.io/static/v1?label=Playground&message=Web&color=green"></a>
 </div>
@@ -33,7 +33,7 @@
 
 -----
 
-Following the great successful open-sourcing of our [HunyuanVideo](https://github.com/Tencent/HunyuanVideo), we proudly present the [HunyuanVideo-I2V](https://github.com/Tencent/HunyuanVideo-I2V), a new image-to-video generation framework to accelerate open-source community exploration!
+Following the great successful open-sourcing of our [HunyuanVideo](https://github.com/Tencent-Hunyuan/HunyuanVideo), we proudly present the [HunyuanVideo-I2V](https://github.com/Tencent-Hunyuan/HunyuanVideo-I2V), a new image-to-video generation framework to accelerate open-source community exploration!
 
 This repo contains official PyTorch model definitions, pre-trained weights and inference/sampling code. You can find more visualizations on our [project page](https://aivideo.hunyuan.tencent.com). Meanwhile, we have released the LoRA training code for customizable special effects, which can be used to create more interesting video effects.
 
@@ -45,7 +45,7 @@ This repo contains official PyTorch model definitions, pre-trained weights and i
 * Mar 13, 2025: 🚀 We release the parallel inference code for HunyuanVideo-I2V powered by [xDiT](https://github.com/xdit-project/xDiT).
 * Mar 11, 2025: 🎉 We have updated the lora training and inference code after fixing the bug.
 * Mar 07, 2025: 🔥 We have fixed the bug in our open-source version that caused ID changes. Please try the new model weights of [HunyuanVideo-I2V](https://huggingface.co/tencent/HunyuanVideo-I2V) to ensure full visual consistency in the first frame and produce higher quality videos. 
-* Mar 06, 2025: 👋 We release the inference code and model weights of HunyuanVideo-I2V. [Download](https://github.com/Tencent/HunyuanVideo-I2V/blob/main/ckpts/README.md).
+* Mar 06, 2025: 👋 We release the inference code and model weights of HunyuanVideo-I2V. [Download](https://github.com/Tencent-Hunyuan/HunyuanVideo-I2V/blob/main/ckpts/README.md).
 
 
 
@@ -76,7 +76,7 @@ If you develop/use HunyuanVideo-I2V in your projects, welcome to let us know.
 
 - ComfyUI-Kijai (FP8 Inference, V2V and IP2V Generation): [ComfyUI-HunyuanVideoWrapper](https://github.com/kijai/ComfyUI-HunyuanVideoWrapper) by [Kijai](https://github.com/kijai)
 - HunyuanVideoGP (GPU Poor version): [HunyuanVideoGP](https://github.com/deepbeepmeep/HunyuanVideoGP) by [DeepBeepMeep](https://github.com/deepbeepmeep)
-- xDiT compatibility improvement: [xDiT compatibility improvement](https://github.com/Tencent/HunyuanVideo-I2V/issues/36#issuecomment-2728068507) by [pftq](https://github.com/pftq) and [xibosun](https://github.com/xibosun)
+- xDiT compatibility improvement: [xDiT compatibility improvement](https://github.com/Tencent-Hunyuan/HunyuanVideo-I2V/issues/36#issuecomment-2728068507) by [pftq](https://github.com/pftq) and [xibosun](https://github.com/xibosun)
 
 ## 📑 Open-source Plan
 - HunyuanVideo-I2V (Image-to-Video Model)
@@ -85,7 +85,6 @@ If you develop/use HunyuanVideo-I2V in your projects, welcome to let us know.
   - [x] ComfyUI
   - [x] Lora training scripts
   - [x] Multi-gpus Sequence Parallel inference (Faster inference speed on more gpus)
-  - [ ] Diffusers
 
 ## Contents
 - [**HunyuanVideo-I2V** 🌅](#hunyuanvideo-i2v-)
@@ -119,7 +118,7 @@ If you develop/use HunyuanVideo-I2V in your projects, welcome to let us know.
 ---
 
 ## **HunyuanVideo-I2V Overall Architecture**
-Leveraging the advanced video generation capabilities of [HunyuanVideo](https://github.com/Tencent/HunyuanVideo), we have extended its application to image-to-video generation tasks. To achieve this, we employ a token replace technique to effectively reconstruct and incorporate reference image information into the video generation process.
+Leveraging the advanced video generation capabilities of [HunyuanVideo](https://github.com/Tencent-Hunyuan/HunyuanVideo), we have extended its application to image-to-video generation tasks. To achieve this, we employ a token replace technique to effectively reconstruct and incorporate reference image information into the video generation process.
 
 Since we utilizes a pre-trained Multimodal Large Language Model (MLLM) with a Decoder-Only architecture as the text encoder, we can significantly enhance the model's ability to comprehend the semantic content of the input image and to seamlessly integrate information from both the image and its associated caption. Specifically, the input image is processed by the MLLM to generate semantic image tokens. These tokens are then concatenated with the video latent tokens, enabling comprehensive full-attention computation across the combined data.
 
@@ -150,7 +149,7 @@ The following table shows the requirements for running HunyuanVideo-I2V model (b
 
 Begin by cloning the repository:
 ```shell
-git clone https://github.com/tencent/HunyuanVideo-I2V
+git clone https://github.com/Tencent-Hunyuan/HunyuanVideo-I2V
 cd HunyuanVideo-I2V
 ```
 
@@ -207,7 +206,7 @@ The details of download pretrained models are shown [here](ckpts/README.md).
 
 ## 🔑 Single-gpu Inference
 
-Similar to [HunyuanVideo](https://github.com/Tencent/HunyuanVideo), HunyuanVideo-I2V supports high-resolution video generation, with resolution up to 720P and video length up to 129 frames (5 seconds).
+Similar to [HunyuanVideo](https://github.com/Tencent-Hunyuan/HunyuanVideo), HunyuanVideo-I2V supports high-resolution video generation, with resolution up to 720P and video length up to 129 frames (5 seconds).
 
 ### Tips for Using Image-to-Video Models
 - **Use Concise Prompts**: To effectively guide the model's generation, keep your prompts short and to the point.
@@ -437,13 +436,11 @@ The speedup of parallel inference is shown as follows.
 If you find [HunyuanVideo](https://arxiv.org/abs/2412.03603) useful for your research and applications, please cite using this BibTeX:
 
 ```BibTeX
-@misc{kong2024hunyuanvideo,
-      title={HunyuanVideo: A Systematic Framework For Large Video Generative Models}, 
-      author={Weijie Kong, Qi Tian, Zijian Zhang, Rox Min, Zuozhuo Dai, Jin Zhou, Jiangfeng Xiong, Xin Li, Bo Wu, Jianwei Zhang, Kathrina Wu, Qin Lin, Aladdin Wang, Andong Wang, Changlin Li, Duojun Huang, Fang Yang, Hao Tan, Hongmei Wang, Jacob Song, Jiawang Bai, Jianbing Wu, Jinbao Xue, Joey Wang, Junkun Yuan, Kai Wang, Mengyang Liu, Pengyu Li, Shuai Li, Weiyan Wang, Wenqing Yu, Xinchi Deng, Yang Li, Yanxin Long, Yi Chen, Yutao Cui, Yuanbo Peng, Zhentao Yu, Zhiyu He, Zhiyong Xu, Zixiang Zhou, Zunnan Xu, Yangyu Tao, Qinglin Lu, Songtao Liu, Dax Zhou, Hongfa Wang, Yong Yang, Di Wang, Yuhong Liu, and Jie Jiang, along with Caesar Zhong},
-      year={2024},
-      archivePrefix={arXiv preprint arXiv:2412.03603},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2412.03603}, 
+@article{kong2024hunyuanvideo,
+  title={Hunyuanvideo: A systematic framework for large video generative models},
+  author={Kong, Weijie and Tian, Qi and Zhang, Zijian and Min, Rox and Dai, Zuozhuo and Zhou, Jin and Xiong, Jiangfeng and Li, Xin and Wu, Bo and Zhang, Jianwei and others},
+  journal={arXiv preprint arXiv:2412.03603},
+  year={2024}
 }
 ```
 
@@ -456,10 +453,10 @@ Additionally, we also thank the Tencent Hunyuan Multimodal team for their help w
 
 
 <!-- ## Github Star History
-<a href="https://star-history.com/#Tencent/HunyuanVideo&Date">
+<a href="https://star-history.com/#Tencent-Hunyuan/HunyuanVideo&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Tencent/HunyuanVideo&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Tencent/HunyuanVideo&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Tencent/HunyuanVideo&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Tencent-Hunyuan/HunyuanVideo&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Tencent-Hunyuan/HunyuanVideo&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Tencent-Hunyuan/HunyuanVideo&type=Date" />
  </picture>
 </a> -->
