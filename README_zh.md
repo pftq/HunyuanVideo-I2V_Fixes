@@ -9,7 +9,7 @@
 # **HunyuanVideo-I2V** 🌅
 
 <div align="center">
-  <a href="https://github.com/Tencent/HunyuanVideo-I2V"><img src="https://img.shields.io/static/v1?label=HunyuanVideo-I2V 代码&message=Github&color=blue"></a> &ensp;
+  <a href="https://github.com/Tencent-Hunyuan/HunyuanVideo-I2V"><img src="https://img.shields.io/static/v1?label=HunyuanVideo-I2V 代码&message=Github&color=blue"></a> &ensp;
   <a href="https://aivideo.hunyuan.tencent.com"><img src="https://img.shields.io/static/v1?label=项目主页&message=Web&color=green"></a> &ensp;
   <a href="https://video.hunyuan.tencent.com"><img src="https://img.shields.io/static/v1?label=在线体验&message=Web&color=green"></a>
 </div>
@@ -27,7 +27,7 @@
 
 -----
 
-继我们成功开源[HunyuanVideo](https://github.com/Tencent/HunyuanVideo)后，我们很高兴推出[HunyuanVideo-I2V](https://github.com/Tencent/HunyuanVideo-I2V)，一个新的图像到视频生成框架，加速开源社区的探索！
+继我们成功开源[HunyuanVideo](https://github.com/Tencent-Hunyuan/HunyuanVideo)后，我们很高兴推出[HunyuanVideo-I2V](https://github.com/Tencent-Hunyuan/HunyuanVideo-I2V)，一个新的图像到视频生成框架，加速开源社区的探索！
 
 本仓库包含官方PyTorch模型定义、预训练权重及推理/采样代码。更多可视化效果请访问[项目主页](https://aivideo.hunyuan.tencent.com)。同时，我们发布了LoRA训练代码，用于定制化特效生成，可创建更有趣的视频效果。
 
@@ -37,7 +37,7 @@
 * 2025年03月13日: 🚀 开源 HunyuanVideo-I2V 多卡并行推理代码，由[xDiT](https://github.com/xdit-project/xDiT)提供。
 * 2025年03月11日: 🎉 在修复bug后我们更新了lora的训练和推理代码。
 * 2025年03月07日: 🔥 我们已经修复了开源版本中导致ID变化的bug，请尝试[HunyuanVideo-I2V](https://huggingface.co/tencent/HunyuanVideo-I2V)新的模型权重，以确保首帧完全视觉一致性，并制作更高质量的视频。
-* 2025年03月06日: 👋 发布HunyuanVideo-I2V的推理代码和模型权重。[下载地址](https://github.com/Tencent/HunyuanVideo-I2V/blob/main/ckpts/README.md)
+* 2025年03月06日: 👋 发布HunyuanVideo-I2V的推理代码和模型权重。[下载地址](https://github.com/Tencent-Hunyuan/HunyuanVideo-I2V/blob/main/ckpts/README.md)
 
 ## 🎥 演示
 ### I2V 示例
@@ -67,7 +67,7 @@
 
 - ComfyUI (支持FP8推理、V2V和IP2V生成): [ComfyUI-HunyuanVideoWrapper](https://github.com/kijai/ComfyUI-HunyuanVideoWrapper) by [Kijai](https://github.com/kijai)
 - HunyuanVideoGP (针对低性能GPU的版本): [HunyuanVideoGP](https://github.com/deepbeepmeep/HunyuanVideoGP) by [DeepBeepMeep](https://github.com/deepbeepmeep)
-- xDiT 兼容性改进: [兼容性改进](https://github.com/Tencent/HunyuanVideo-I2V/issues/36#issuecomment-2728068507) by [pftq](https://github.com/pftq) and [xibosun](https://github.com/xibosun)
+- xDiT 兼容性改进: [兼容性改进](https://github.com/Tencent-Hunyuan/HunyuanVideo-I2V/issues/36#issuecomment-2728068507) by [pftq](https://github.com/pftq) and [xibosun](https://github.com/xibosun)
 
 ## 📑 开源计划
 - HunyuanVideo-I2V（图像到视频模型）
@@ -111,7 +111,7 @@
 ---
 
 ## **HunyuanVideo-I2V 整体架构**
-基于[HunyuanVideo](https://github.com/Tencent/HunyuanVideo)强大的视频生成能力，我们将其扩展至图像到视频生成任务。为此，我们采用首帧Token替换方案，有效重构并融合参考图像信息至视频生成流程中。
+基于[HunyuanVideo](https://github.com/Tencent-Hunyuan/HunyuanVideo)强大的视频生成能力，我们将其扩展至图像到视频生成任务。为此，我们采用首帧Token替换方案，有效重构并融合参考图像信息至视频生成流程中。
 
 由于我们使用预训练的Decoder-Only架构多模态大语言模型（MLLM）作为文本编码器，可用于显著增强模型对输入图像语义内容的理解能力，并实现图像与文本描述信息的深度融合。具体而言，输入图像经MLLM处理后生成语义图像tokens，这些tokens与视频隐空间tokens拼接，实现跨模态的全注意力计算。
 
@@ -138,7 +138,7 @@
 
 首先克隆仓库：
 ```shell
-git clone https://github.com/tencent/HunyuanVideo-I2V
+git clone https://github.com/Tencent-Hunyuan/HunyuanVideo-I2V
 cd HunyuanVideo-I2V
 ```
 
@@ -191,7 +191,7 @@ docker run -itd --gpus all --init --net=host --uts=host --ipc=host --name hunyua
 
 ## 🔑 单 GPU 推理
 
-类似于 [HunyuanVideo](https://github.com/Tencent/HunyuanVideo)，HunyuanVideo-I2V 支持高分辨率视频生成，分辨率最高可达 720P，视频长度最高可达 129 帧（5 秒）。
+类似于 [HunyuanVideo](https://github.com/Tencent-Hunyuan/HunyuanVideo)，HunyuanVideo-I2V 支持高分辨率视频生成，分辨率最高可达 720P，视频长度最高可达 129 帧（5 秒）。
 ### 使用图生视频模型的建议
 
 - **使用简短的提示**：为了有效地引导模型的生成，请保持提示简短且直截了当。
@@ -415,13 +415,11 @@ xDiT 并行推理加速如下表所示。
 如果您发现 [HunyuanVideo](https://arxiv.org/abs/2412.03603) 对您的研究和应用有所帮助，请使用以下 BibTeX 引用：
 
 ```BibTeX
-@misc{kong2024hunyuanvideo,
-      title={HunyuanVideo: A Systematic Framework For Large Video Generative Models}, 
-      author={Weijie Kong, Qi Tian, Zijian Zhang, Rox Min, Zuozhuo Dai, Jin Zhou, Jiangfeng Xiong, Xin Li, Bo Wu, Jianwei Zhang, Kathrina Wu, Qin Lin, Aladdin Wang, Andong Wang, Changlin Li, Duojun Huang, Fang Yang, Hao Tan, Hongmei Wang, Jacob Song, Jiawang Bai, Jianbing Wu, Jinbao Xue, Joey Wang, Junkun Yuan, Kai Wang, Mengyang Liu, Pengyu Li, Shuai Li, Weiyan Wang, Wenqing Yu, Xinchi Deng, Yang Li, Yanxin Long, Yi Chen, Yutao Cui, Yuanbo Peng, Zhentao Yu, Zhiyu He, Zhiyong Xu, Zixiang Zhou, Zunnan Xu, Yangyu Tao, Qinglin Lu, Songtao Liu, Dax Zhou, Hongfa Wang, Yong Yang, Di Wang, Yuhong Liu, and Jie Jiang, along with Caesar Zhong},
-      year={2024},
-      archivePrefix={arXiv preprint arXiv:2412.03603},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2412.03603}, 
+@article{kong2024hunyuanvideo,
+  title={Hunyuanvideo: A systematic framework for large video generative models},
+  author={Kong, Weijie and Tian, Qi and Zhang, Zijian and Min, Rox and Dai, Zuozhuo and Zhou, Jin and Xiong, Jiangfeng and Li, Xin and Wu, Bo and Zhang, Jianwei and others},
+  journal={arXiv preprint arXiv:2412.03603},
+  year={2024}
 }
 ```
 
@@ -433,11 +431,11 @@ HunyuanVideo 的开源离不开诸多开源工作，这里我们特别感谢 [SD
 
 <!-- ## Star 趋势
 
-<a href="https://star-history.com/#Tencent/HunyuanVideo&Date">
+<a href="https://star-history.com/#Tencent-Hunyuan/HunyuanVideo&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Tencent/HunyuanVideo&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Tencent/HunyuanVideo&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Tencent/HunyuanVideo&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Tencent-Hunyuan/HunyuanVideo&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Tencent-Hunyuan/HunyuanVideo&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Tencent-Hunyuan/HunyuanVideo&type=Date" />
  </picture>
 </a> -->
 
